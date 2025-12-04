@@ -17,11 +17,18 @@ from bayesian_optimization.objective_function import ObjectiveFunction
 # undetectable_error_rate = Undetectable_error_rate(stabilizer_code,noise_model=(1,1,1))
 # print(undetectable_error_rate.evaluate(p=0.01))
 from pymoo.core.sampling import Sampling
+import sys
+if len(sys.argv) > 2:
+    seed= sys.argv[1]
+    dataset_index = sys.argv[2]
+else:
+    seed = 42
+    dataset_index = 0
 
 l=6
 g=3
 dataset_index = 0
-seed = 1
+
 class MySampling(Sampling):
     def __init__(self, init_samples):
         super().__init__()

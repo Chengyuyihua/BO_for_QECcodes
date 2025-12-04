@@ -854,11 +854,19 @@ class Get_new_points_function():
         return np.array(results)
 if __name__ == '__main__':
     import pickle
+    import sys
     seed = 42
+    if len(sys.argv) > 2:
+        seed= sys.argv[1]
+        dataset_index = sys.argv[2]
+    else:
+        seed = 42
+        dataset_index = 0
+
     set_all_seeds(seed)
     l = 12
     g = 6 # g here is m in Bravyi et al's paper
-    dataset_index = 0
+    
     
     para_dict = {'l':l,'g':g}
     code_class = 'bb'

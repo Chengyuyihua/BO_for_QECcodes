@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from code_construction.code_construction import CodeConstructor
 from bayesian_optimization.objective_function import ObjectiveFunction
+import sys
 def set_all_seeds(seed: int = 42):
     random.seed(seed)
     np.random.seed(seed)
@@ -57,7 +58,14 @@ class Get_new_points_function():
     
 if __name__ == '__main__':
     import pickle
-    seed = 42
+    
+    
+    if len(sys.argv) > 2:
+        seed= sys.argv[1]
+        dataset_index = sys.argv[2]
+    else:
+        seed = 42
+        dataset_index = 0
     set_all_seeds(seed)
     l = 12
     g = 6 # g here is m in Bravyi et al's paper
