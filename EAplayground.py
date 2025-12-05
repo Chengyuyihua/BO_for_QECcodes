@@ -76,7 +76,7 @@ print(problem.best_result)
 print(problem.best_parameters)
 print("Best solution found: \nX = %s\nF = %s" % (res.X, -res.F))
 
-with open(f'./data/BO_results/EA_{l}_{g}_{dataset_index}_{seed}','wb') as f:
+with open(f'./data/BO_results/EA_{l}_{g}_{dataset_index}_{seed}.pkl','wb') as f:
     results = {
         'best_x':problem.best_parameters,
         'best_y':problem.best_result,
