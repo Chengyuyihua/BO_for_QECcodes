@@ -61,8 +61,8 @@ if __name__ == '__main__':
     
     
     if len(sys.argv) > 2:
-        seed= sys.argv[1]
-        dataset_index = sys.argv[2]
+        seed= int(sys.argv[1])
+        dataset_index = int(sys.argv[2])
     else:
         seed = 42
         dataset_index = 0
