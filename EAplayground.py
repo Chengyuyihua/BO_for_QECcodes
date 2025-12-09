@@ -19,8 +19,8 @@ from bayesian_optimization.objective_function import ObjectiveFunction
 from pymoo.core.sampling import Sampling
 import sys
 if len(sys.argv) > 2:
-    seed= sys.argv[1]
-    dataset_index = sys.argv[2]
+    seed= int(sys.argv[1])
+    dataset_index = int(sys.argv[2])
 else:
     seed = 42
     dataset_index = 0
