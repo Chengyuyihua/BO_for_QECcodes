@@ -31,8 +31,8 @@ class Get_new_points_function():
 
     def get_new_bb_vector(self,number):
         results = []
-        l = self.hyperparameters['l']
-        g = self.hyperparameters['g']
+        l = self.code_constructor.para_dict['l']
+        g = self.code_constructor.para_dict['g']
         if self.init == False and l==12 and g==999:
             print('best known bb code added to initial points')
             self.init=True

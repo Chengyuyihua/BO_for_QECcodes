@@ -638,8 +638,7 @@ class GPTrainer:
             optimizer, mode='min',
             factor=float(cfg.get('factor', 0.5)),
             patience=int(cfg.get('patience', 5)),
-            min_lr=float(cfg.get('min_lr', 1e-6)),
-            verbose=False
+            min_lr=float(cfg.get('min_lr', 1e-6))
         )
 
     def _register_priors_safely(self):
@@ -828,8 +827,8 @@ class Get_new_points_function():
 
     def get_new_bb_vector(self,number):
         results = []
-        l = self.hyperparameters['l']
-        g = self.hyperparameters['g']
+        l = self.code_constructor.para_dict['l']
+        g = self.code_constructor.para_dict['g']
         if self.init == False and l==12 and g==999:
             print('best known bb code added to initial points')
             self.init=True
@@ -857,15 +856,15 @@ if __name__ == '__main__':
     import sys
     seed = 42
     if len(sys.argv) > 2:
-        seed= sys.argv[1]
-        dataset_index = sys.argv[2]
+        seed= int(sys.argv[1])
+        dataset_index = int(sys.argv[2])
     else:
         seed = 42
         dataset_index = 0
 
     set_all_seeds(seed)
-    l = 12
-    g = 6 # g here is m in Bravyi et al's paper
+    l = 6
+    g = 3 # g here is m in Bravyi et al's paper
     
     
     para_dict = {'l':l,'g':g}
