@@ -25,8 +25,8 @@ else:
     seed = 42
     dataset_index = 0
 
-l=6
-g=3
+l=12
+g=6
 dataset_index = 0
 
 class MySampling(Sampling):

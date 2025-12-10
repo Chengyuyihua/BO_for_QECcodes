@@ -27,7 +27,7 @@ class Get_new_points_function():
         return new_points
         
     def get_new_points_HGP(self,number):
-        return np.random.randint(0, self.hyperparameters['m'] + 1, (number, self.hyperparameters['p'] * self.hyperparameters['q']))
+        return np.random.randint(0, code_constructor.para_dict['m'] + 1, (number, code_constructor.para_dict['p'] * code_constructor.para_dict['q']))
 
     def get_new_bb_vector(self,number):
         results = []
@@ -99,6 +99,7 @@ if __name__ == '__main__':
     best_y = -999
     for i in range(4*50):
         F,_ = obj_func(X_random[i])
+        print(f'The {i}th point, obj_func:{F}')
         flat3.append(F)
         if F>=best_y:
             best_x = X_random[i]
@@ -106,7 +107,7 @@ if __name__ == '__main__':
 
 
     flat3 = y_init + flat3
-    with open(f'./data/BO_results/EA_{l}_{g}_{dataset_index}_{seed}.pkl','wb') as f:
+    with open(f'./data/BO_results/RS_{l}_{g}_{dataset_index}_{seed}.pkl','wb') as f:
         results = {
             'best_x':best_x,
             'best_y':best_y,
