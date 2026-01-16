@@ -118,7 +118,7 @@ if __name__ == '__main__':
 
 
     flat3 = y_init + flat3
-    with open(f'./data/BO_results/RS_{l}_{g}_{dataset_index}_{seed}.pkl','wb') as f:
+    with open(f'./data/BO_results/RS_{l}_{g}_{dataset_index}_{seed}_{lambda_}.pkl','wb') as f:
         results = {
             'best_x':best_x,
             'best_y':best_y,

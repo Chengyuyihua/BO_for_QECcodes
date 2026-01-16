@@ -1001,7 +1001,7 @@ if __name__ == '__main__':
     y_init_list = [i.item() for i in y_init]
     flat = y_init_list + flat
 
-    with open(f'./data/BO_results/BO_{l}_{g}_{dataset_index}_{seed}.pkl','wb') as f:
+    with open(f'./data/BO_results/BO_{l}_{g}_{dataset_index}_{seed}_{lambda_}.pkl','wb') as f:
         results = {
             'best_x':best_x,
             'best_y':best_y,
