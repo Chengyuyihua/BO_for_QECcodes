@@ -18,16 +18,22 @@ from bayesian_optimization.objective_function import ObjectiveFunction
 # print(undetectable_error_rate.evaluate(p=0.01))
 from pymoo.core.sampling import Sampling
 import sys
-if len(sys.argv) > 2:
+if len(sys.argv) == 3:
+        seed= int(sys.argv[1])
+        dataset_index = int(sys.argv[2])
+        lambda_ = 1
+elif len(sys.argv) >3:
     seed= int(sys.argv[1])
     dataset_index = int(sys.argv[2])
+    lambda_ = float(sys.argv[3])
 else:
     seed = 42
     dataset_index = 0
+    lambda_ = 1
 
 l=12
 g=6
-
+print(f'(l,g)=({l},{g}), dataset_index = {dataset_index}, seed={seed}, lambda = {lambda_}')
 
 class MySampling(Sampling):
     def __init__(self, init_samples):
@@ -43,7 +49,7 @@ code_class = 'bb'
 code_constructor = CodeConstructor(method=code_class,para_dict = para_dict)
 # define objective function
 pp=0.05
-Obj_Func = ObjectiveFunction(code_constructor, pp=pp,decoder_param={'trail':10_000})
+Obj_Func = ObjectiveFunction(code_constructor,lambda_=lambda_, pp=pp,decoder_param={'trail':10_000})
 obj_func = Obj_Func.forward
 if l ==6 and g==3:
     init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_63.pkl"

@@ -854,17 +854,24 @@ class Get_new_points_function():
 if __name__ == '__main__':
     import pickle
     import sys
-    seed = 42
-    if len(sys.argv) > 2:
+    
+    if len(sys.argv) == 3:
         seed= int(sys.argv[1])
         dataset_index = int(sys.argv[2])
+        lambda_ = 1
+    elif len(sys.argv) >3:
+        seed= int(sys.argv[1])
+        dataset_index = int(sys.argv[2])
+        lambda_ = float(sys.argv[3])
     else:
         seed = 42
         dataset_index = 0
+        lambda_ = 1
 
     set_all_seeds(seed)
     l = 12
     g = 6 # g here is m in Bravyi et al's paper
+    print(f'(l,g)=({l},{g}), dataset_index = {dataset_index}, seed={seed}, lambda = {lambda_}')
     
     
     para_dict = {'l':l,'g':g}
@@ -874,7 +881,7 @@ if __name__ == '__main__':
     code_constructor = CodeConstructor(method=code_class,para_dict = para_dict)
     # define objective function
     pp=0.05
-    Obj_Func = ObjectiveFunction(code_constructor, pp=pp,decoder_param={'trail':10_000})
+    Obj_Func = ObjectiveFunction(code_constructor,lambda_ = lambda_, pp=pp,decoder_param={'trail':10_000})
     obj_func = Obj_Func.forward
     pl_to_obj = Obj_Func.pl_to_obj_with_std
     # method of sampling new points

@@ -60,16 +60,22 @@ if __name__ == '__main__':
     import pickle
     
     
-    if len(sys.argv) > 2:
+    if len(sys.argv) == 3:
         seed= int(sys.argv[1])
         dataset_index = int(sys.argv[2])
+        lambda_ = 1
+    elif len(sys.argv) >3:
+        seed= int(sys.argv[1])
+        dataset_index = int(sys.argv[2])
+        lambda_ = float(sys.argv[3])
     else:
         seed = 42
         dataset_index = 0
+        lambda_ = 1
     set_all_seeds(seed)
     l = 12
     g = 6 # g here is m in Bravyi et al's paper
-
+    print(f'(l,g)=({l},{g}), dataset_index = {dataset_index}, seed={seed}, lambda = {lambda_}')
     
     para_dict = {'l':l,'g':g}
     code_class = 'bb'
@@ -89,7 +95,7 @@ if __name__ == '__main__':
     code_constructor = CodeConstructor(method=code_class,para_dict = para_dict)
     # define objective function
     pp=0.05
-    Obj_Func = ObjectiveFunction(code_constructor, pp=pp,decoder_param={'trail':10_000})
+    Obj_Func = ObjectiveFunction(code_constructor,lambda_ = lambda_ ,pp=pp,decoder_param={'trail':10_000})
     obj_func = Obj_Func.forward
     pl_to_obj = Obj_Func.pl_to_obj_with_std
     # method of sampling new points
@@ -98,10 +104,14 @@ if __name__ == '__main__':
     flat3 = []
     best_x = None
     best_y = -999
+    x_history = []
+    pl_history = []
     for i in range(4*50):
-        F,_ = obj_func(X_random[i])
+        F,pL = obj_func(X_random[i])
         print(f'The {i}th point, obj_func:{F}')
         flat3.append(F)
+        x_history.append(X_random[i])
+        pl_history.append(pL)
         if F>=best_y:
             best_x = X_random[i]
             best_y = F
