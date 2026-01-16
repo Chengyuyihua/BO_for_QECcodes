@@ -69,10 +69,11 @@ if __name__ == '__main__':
     set_all_seeds(seed)
     l = 12
     g = 6 # g here is m in Bravyi et al's paper
-    dataset_index = 0
+
     
     para_dict = {'l':l,'g':g}
     code_class = 'bb'
+    
     if l ==6 and g==3:
         init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_63.pkl"
     else:

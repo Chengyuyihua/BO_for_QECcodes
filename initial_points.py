@@ -81,8 +81,8 @@ if __name__ == '__main__':
     import pickle
     seed = 42
     set_all_seeds(seed)
-    l = 6
-    g = 3 # g here is m in Bravyi et al's paper
+    l = 12
+    g = 6 # g here is m in Bravyi et al's paper
     para_dict = {'l':l,'g':g}
     code_class = 'bb'
 
@@ -90,7 +90,7 @@ if __name__ == '__main__':
     code_constructor = CodeConstructor(method=code_class,para_dict = para_dict)
     # define objective function
     pp=0.05
-    Obj_Func = ObjectiveFunction(code_constructor, pp=pp,decoder_param={'trail':10_000})
+    Obj_Func = ObjectiveFunction(code_constructor, pp=pp,decoder_param={'trail':10})
     obj_func = Obj_Func.forward
     pl_to_obj = Obj_Func.pl_to_obj_with_std
     # method of sampling new points
@@ -108,5 +108,5 @@ if __name__ == '__main__':
             pl_init.append(pl)
             print(f'x:{x},y:{y},pl:{pl}')
         data = {'X':X_init,'y':y_init,'pl':pl_init}
-        with open(f"./data/BO_initial_points/BO_initial_points_{i}_63.pkl", "wb") as f:
+        with open(f"./data/BO_initial_points/BO_initial_points_{i+5}.pkl", "wb") as f:
             pickle.dump(data, f)

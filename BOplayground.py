@@ -863,8 +863,8 @@ if __name__ == '__main__':
         dataset_index = 0
 
     set_all_seeds(seed)
-    l = 6
-    g = 3 # g here is m in Bravyi et al's paper
+    l = 12
+    g = 6 # g here is m in Bravyi et al's paper
     
     
     para_dict = {'l':l,'g':g}

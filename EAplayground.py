@@ -27,7 +27,7 @@ else:
 
 l=12
 g=6
-dataset_index = 0
+
 
 class MySampling(Sampling):
     def __init__(self, init_samples):
