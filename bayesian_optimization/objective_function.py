@@ -207,12 +207,13 @@ class ObjectiveFunction:
         returns (F_mean, F_std), or with aux diagnostics if return_aux=True.
     """
 
-    def __init__(self, code_constructor, pp=0.01, decoder_param={'trail': 10000,'max_error':100},
+    def __init__(self, code_constructor, lambda_ = 1,pp=0.01, decoder_param={'trail': 10000,'max_error':100},
                  circuit_level_noise=False, circuit_param=None):
         self.code_constructor = code_constructor
         self.n = int(code_constructor.n)
         self.pp = float(pp)
         self.decoder_param = dict(decoder_param)
+        self.lambda_ = lambda_
 
         # Converters
         self.pl_t_converter = pl_t_converter(self.n, p_phys=self.pp, use_pchip=True)
@@ -267,6 +268,8 @@ class ObjectiveFunction:
                 xyz_bias=[1, 1, 1],
                 trail=self.decoder_param.get('trail', 10000)
             )
+            pL = min(pL,1-(1e-20))
+            pL = max(pL,1e-20)
             return float(pL)
 
     def nller(self, x):
@@ -275,7 +278,7 @@ class ObjectiveFunction:
         if css.k == 0:
             return 1.0
         pL = self.ler(css)
-        return -np.log(pL), pL
+        return float(-np.log(pL)), float(pL)
 
     def nllerpq(self, x):
         """Compute -log(1 - (1 - pL)^{1/k}), used in per-logical-qubit metrics."""
@@ -283,7 +286,7 @@ class ObjectiveFunction:
         if css.k == 0:
             return 1.0
         pL = self.ler(css)
-        return -np.log(1.0 - (1.0 - pL) ** (1.0 / css.k)), pL
+        return float(-np.log(1.0 - (1.0 - pL) ** (1.0 / css.k))), float(pL)
 
     def lerpq(self, x):
         """Compute per-logical-qubit logical error rate."""
@@ -299,9 +302,9 @@ class ObjectiveFunction:
         if css.k == 0:
             return 0.0, 1.0
         pL = self.ler(css)
-        pL_per_lq = 1.0 - (1.0 - pL) ** (1.0 / css.k)
-        pL_per_lq = max(float(pL_per_lq), 1e-30)
-        t_hat = self.pl_t_converter.pl_to_t(k=None, pl=pL_per_lq)
+        # pL_per_lq = 1.0 - (1.0 - pL) ** (1.0 / css.k)
+        # pL_per_lq = max(float(pL_per_lq), 1e-30)
+        t_hat = self.pl_t_converter.pl_to_t(k=None, pl=pL)
         return float(t_hat), float(pL)
 
     def forward(self, x):
@@ -315,7 +318,7 @@ class ObjectiveFunction:
         R = k / float(self.n)
         t_hat, pL_total = self.psuedo_t(css)
         f2_val = float(self.f2_converter.t_to_f2(t_hat))
-        F = R + f2_val - 1.0
+        F = self.lambda_ * R + f2_val - 1.0
         return float(F), float(pL_total)
 
     # ---------------------------
@@ -323,14 +326,14 @@ class ObjectiveFunction:
     # ---------------------------
     def nlpl_with_std(self, x, pl_total_mean, pl_total_std):
         """Compute (-log pL, propagated std)."""
-        return -np.log(pl_total_mean), pl_total_std / pl_total_mean
+        return float(-np.log(pl_total_mean)),float( pl_total_std / pl_total_mean)
     
     def nllerpq_with_std(self, x, pl_total_mean, pl_total_std):
         """Compute mean/std of -log(1 - (1 - pL)^{1/k})."""
         css = self.code_constructor.construct(self._to_np_bits(x))
         mean = -np.log(1-(1-pl_total_mean)**(1/css.k))
         std = pl_total_std*(1-pl_total_mean)**(1/css.k-1)/(css.k * (1-(1-pl_total_mean)**(1/css.k)))
-        return mean, std
+        return float(mean), float(std)
 
     def pl_to_obj_with_std(self, x, pl_total_mean, pl_total_std, return_aux: bool = False):
         """
