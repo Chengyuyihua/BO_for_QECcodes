@@ -90,7 +90,7 @@ if __name__ == '__main__':
     code_constructor = CodeConstructor(method=code_class,para_dict = para_dict)
     # define objective function
     pp=0.05
-    Obj_Func = ObjectiveFunction(code_constructor, pp=pp,decoder_param={'trail':10})
+    Obj_Func = ObjectiveFunction(code_constructor, pp=pp,decoder_param={'trail':10_000})
     obj_func = Obj_Func.forward
     pl_to_obj = Obj_Func.pl_to_obj_with_std
     # method of sampling new points
