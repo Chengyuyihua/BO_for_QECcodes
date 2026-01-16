@@ -268,7 +268,7 @@ class ObjectiveFunction:
                 xyz_bias=[1, 1, 1],
                 trail=self.decoder_param.get('trail', 10000)
             )
-            pL = min(pL,1-(1e-20))
+            pL = min(pL,1-(1e-8))
             pL = max(pL,1e-20)
             return float(pL)
 
@@ -371,23 +371,38 @@ class ObjectiveFunction:
         m_total = min(max(m_total, eps), 1.0 - 1e-12)
 
         # Convert total → per-logical-qubit
-        m_per = 1.0 - (1.0 - m_total) ** (1.0 / k)
-        gprime = (1.0 / k) * (1.0 - m_total) ** (1.0 / k - 1.0)
-        s_per = abs(gprime) * s_total
+        # m_per = 1.0 - (1.0 - m_total) ** (1.0 / k)
+        # gprime = (1.0 / k) * (1.0 - m_total) ** (1.0 / k - 1.0)
+        # s_per = abs(gprime) * s_total
 
-        # per → t_hat → f2 → F_mean
-        t_hat = float(self.pl_t_converter.pl_to_t(k=None, pl=m_per))
+
+        # # per → t_hat → f2 → F_mean
+        # t_hat = float(self.pl_t_converter.pl_to_t(k=None, pl=m_per))
+        # f2_val = float(self.f2_converter.t_to_f2(t_hat))
+        # F_mean = R + f2_val - 1.0
+
+        # # Chain derivative: dF/d(pL_total)
+        # dlog10pl_dt = float(self.pl_t_converter.dlog10pl_dt(t_hat))
+        # dplper_dt = math.log(10.0) * m_per * dlog10pl_dt
+        # dt_dplper = 0.0 if abs(dplper_dt) < 1e-300 else 1.0 / dplper_dt
+        # df2_dt = float(self.f2_converter.df2_dt(t_hat))
+        # dF_dptotal = df2_dt * dt_dplper * gprime
+
+        # F_std = abs(dF_dptotal) * s_total
+        m = m_total
+        s = s_total
+
+        t_hat = float(self.pl_t_converter.pl_to_t(k=None, pl=m))
         f2_val = float(self.f2_converter.t_to_f2(t_hat))
         F_mean = R + f2_val - 1.0
 
-        # Chain derivative: dF/d(pL_total)
         dlog10pl_dt = float(self.pl_t_converter.dlog10pl_dt(t_hat))
-        dplper_dt = math.log(10.0) * m_per * dlog10pl_dt
-        dt_dplper = 0.0 if abs(dplper_dt) < 1e-300 else 1.0 / dplper_dt
+        dpl_dt = math.log(10.0) * m * dlog10pl_dt      # dp/dt
+        dt_dpl = 0.0 if abs(dpl_dt) < 1e-300 else 1.0 / dpl_dt
         df2_dt = float(self.f2_converter.df2_dt(t_hat))
-        dF_dptotal = df2_dt * dt_dplper * gprime
 
-        F_std = abs(dF_dptotal) * s_total
+        dF_dpl = df2_dt * dt_dpl
+        F_std = abs(dF_dpl) * s
 
         if return_aux:
             aux = {
