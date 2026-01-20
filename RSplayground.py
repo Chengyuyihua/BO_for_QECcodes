@@ -81,9 +81,9 @@ if __name__ == '__main__':
     code_class = 'bb'
     
     if l ==6 and g==3:
-        init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_63.pkl"
+        init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_{lambda_}_63.pkl"
     else:
-        init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}.pkl"
+        init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_{lambda_}.pkl"
     # file with 63 suffix has (l,m)=(6,3). Otherwise (l,m)=(12,6)
     with open(init_data_file, "rb") as f:
         data = pickle.load(f)
