@@ -394,7 +394,7 @@ class ObjectiveFunction:
 
         t_hat = float(self.pl_t_converter.pl_to_t(k=None, pl=m))
         f2_val = float(self.f2_converter.t_to_f2(t_hat))
-        F_mean = R + f2_val - 1.0
+        F_mean = self.lambda_ * R + f2_val - 1.0
 
         dlog10pl_dt = float(self.pl_t_converter.dlog10pl_dt(t_hat))
         dpl_dt = math.log(10.0) * m * dlog10pl_dt      # dp/dt
