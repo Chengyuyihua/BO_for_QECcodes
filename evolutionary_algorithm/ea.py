@@ -1,13 +1,10 @@
 """
     This file contains the implementation of the Evolutionary Algorithm on the QEC codes.
 """
+
 from pymoo.core.problem import Problem
 import numpy as np
-from pymoo.algorithms.soo.nonconvex.ga import GA
-from pymoo.optimize import minimize
-# from bayesian_optimization.bo import ObjectiveFunction
-from bayesian_optimization.objective_function import ObjectiveFunction
-from code_construction.code_construction import CodeConstructor
+
 
 class CanonicalCSSEvolutionaryOptimization(Problem):
     def __init__(self,nbits):

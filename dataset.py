@@ -1,19 +1,11 @@
-from typing import Callable, Tuple, List, Dict, Optional
 import pickle
 import numpy as np
-
 from evaluation.decoder_based_evaluation import CSS_Evaluator
 from code_construction.code_construction import CodeConstructor
-
-import matplotlib.pyplot as plt
 from torch.utils.data import Dataset
-import numpy as np
-import random
 from evaluation.circuit_level_noise import MonteCarloEstimationOfLogicalErrorRateUnderCircuitLevelNoise
 
 
-import numpy as np
-import torch
 class Get_new_points_function():
     def __init__(self,method='qc-ldpc-hgp',hyperparameters = {'p': 2, 'q': 6, 'm': 2},encode='None',param={'p':0.5}):
         self.method = method
@@ -103,10 +95,7 @@ class QEC_Dataset(Dataset):
             return x.k
         X = []
         y = []
-        print('Generating dataset...')
-
-        
-        
+        print('Generating dataset...')    
         
         
         # target = 200
@@ -143,7 +132,10 @@ class QEC_Dataset(Dataset):
     def __getitem__(self,idx):
 
         return self.X[idx], self.y[idx]
+    
+
 from torch.utils.data import Subset
+
 class QECSubset(Subset):
     def __init__(self, base_dataset, indices):
         super().__init__(base_dataset,indices)

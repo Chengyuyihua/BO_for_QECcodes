@@ -5,28 +5,22 @@ DEVICE = 'cuda'
 import random
 import numpy as np
 import torch
+from torch.nn.utils import clip_grad_norm_
+from torch.distributions.normal import Normal
+
 from code_construction.code_construction import CodeConstructor
 from bayesian_optimization.objective_function import ObjectiveFunction
 from bayesian_optimization.encoder import *
 from bayesian_optimization.chaincomplexembedding import *
 from bayesian_optimization.gp import *
+from bayesian_optimization.bo import BO_on_QEC
+
 import gpytorch
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from gpytorch.distributions import MultivariateNormal
 from gpytorch.kernels import RBFKernel, MaternKernel, SpectralMixtureKernel, ScaleKernel
 import copy
-from typing import Dict, Optional, Tuple, Any, List
-
-import torch
-import gpytorch
-from gpytorch.mlls import ExactMarginalLogLikelihood
-from torch.nn.utils import clip_grad_norm_
-import math
+from typing import Dict, Optional, Tuple, Any, List, Union
 from dataclasses import dataclass, asdict
-from typing import Tuple, Union, Dict, Any
-
-from torch.distributions.normal import Normal
-from bayesian_optimization.bo import BO_on_QEC
 
 
 class HillClimbing:
@@ -896,9 +890,16 @@ if __name__ == '__main__':
     #     y_init.append(y)
     #     pl_init.append(pl)
     if l ==6 and g==3:
-        init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_{lambda_}_63.pkl"
+        if lambda_ == 1:
+            init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_1.0_63.pkl"
+        else:
+            init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_{lambda_}_63.pkl"
+
     else:
-        init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_{lambda_}.pkl"
+        if lambda_ == 1:
+            init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_1.0.pkl"
+        else:
+            init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_{lambda_}.pkl"
     # file with 63 suffix has (l,m)=(6,3). Otherwise (l,m)=(12,6)
     with open(init_data_file, "rb") as f:
         data = pickle.load(f)

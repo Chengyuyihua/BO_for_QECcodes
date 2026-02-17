@@ -5,8 +5,6 @@ import torch
 import torch.nn as nn
 
 
-
-
 def _cum_offsets(sizes: List[int]) -> List[int]:
     """Compute cumulative offsets for a list of segment sizes."""
     offs = [0]

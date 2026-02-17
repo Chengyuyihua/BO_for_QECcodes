@@ -1,6 +1,7 @@
 from typing import Optional, Sequence, Tuple, List
 import numpy as np
 
+
 try:
     import torch
 except Exception:

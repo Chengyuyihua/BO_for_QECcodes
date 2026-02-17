@@ -6,12 +6,9 @@ from typing import List, Dict, Any, Tuple, Optional
 import numpy as np
 import torch
 from toponetx import CombinatorialComplex
-from torch_geometric.utils import dense_to_sparse
-from typing import List
 from scipy.sparse import csr_matrix
 
-import numpy as np
-from torch_geometric.data import Data, DataLoader
+from torch_geometric.data import Data
 from bayesian_optimization.gadget import *
 
 
@@ -69,7 +66,7 @@ class GraphEncoder():
         self.nz = nz
         self.grakel_use = grakel_use
         if grakel_use:
-            from grakel import Graph
+            pass
         self.logical = logical
     def preprocess_graph(self,adj_matrix: np.ndarray, node_onehots: np.ndarray):
         """
@@ -181,7 +178,6 @@ class GraphEncoder():
 
 # optional SciPy sparse backend
 try:
-    import scipy.sparse as sp
     _HAS_SCIPY = True
 except Exception:
     _HAS_SCIPY = False

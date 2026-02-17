@@ -1,11 +1,8 @@
 # Evolutionary algorim
 from code_construction.code_construction import CodeConstructor
-import numpy as np
 from evolutionary_algorithm.ea import BivariateBicycleCodeEvolutionaryOptimization
-from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PM
 from pymoo.operators.repair.rounding import RoundingRepair
-from pymoo.operators.sampling.rnd import IntegerRandomSampling
 from pymoo.algorithms.soo.nonconvex.ga import GA
 from pymoo.operators.crossover.ux import UniformCrossover
 from pymoo.optimize import minimize
@@ -18,6 +15,8 @@ from bayesian_optimization.objective_function import ObjectiveFunction
 # print(undetectable_error_rate.evaluate(p=0.01))
 from pymoo.core.sampling import Sampling
 import sys
+
+
 if len(sys.argv) == 3:
         seed= int(sys.argv[1])
         dataset_index = int(sys.argv[2])

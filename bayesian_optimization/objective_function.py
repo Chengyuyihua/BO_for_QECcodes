@@ -4,6 +4,7 @@ from evaluation.decoder_based_evaluation import *
 from code_construction.code_construction import *
 from evaluation.circuit_level_noise import MonteCarloEstimationOfLogicalErrorRateUnderCircuitLevelNoise
 
+
 # =========================
 # Utilities
 # =========================
@@ -191,8 +192,6 @@ class pl_t_converter:
 # ObjectiveFunction (with uncertainty)
 # =========================================
 
-import math
-import numpy as np
 import torch
 
 class ObjectiveFunction:

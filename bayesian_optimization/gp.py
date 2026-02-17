@@ -10,15 +10,13 @@ from botorch.models.gpytorch import GPyTorchModel
 from gpytorch.distributions import MultivariateNormal
 from gpytorch.kernels import RBFKernel, ScaleKernel
 from gpytorch.likelihoods import GaussianLikelihood
-from gpytorch.means import ConstantMean,LinearMean
 from gpytorch.models import ExactGP
 from torch import Tensor
 from gpytorch.priors import LogNormalPrior
 from gpytorch.constraints import Interval
-from gpytorch.kernels import RBFKernel, ScaleKernel
-from gpytorch.likelihoods import GaussianLikelihood
 import math
 device='cuda'
+
 
 class NNMean(Mean):
     def __init__(self, input_size, hidden=256):
@@ -185,7 +183,6 @@ class GaussianProcess_QEC(gpytorch.models.ExactGP):
 if __name__ == '__main__':
     import torch
     import numpy as np
-    import matplotlib.pyplot as plt
     import gpytorch
     from gpytorch.kernels import ScaleKernel, RBFKernel
     from gpytorch.distributions import MultivariateNormal

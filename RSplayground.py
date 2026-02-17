@@ -4,6 +4,8 @@ import torch
 from code_construction.code_construction import CodeConstructor
 from bayesian_optimization.objective_function import ObjectiveFunction
 import sys
+
+
 def set_all_seeds(seed: int = 42):
     random.seed(seed)
     np.random.seed(seed)

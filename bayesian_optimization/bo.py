@@ -10,7 +10,6 @@ Design highlights:
 """
 
 import time
-import numpy as np
 import torch
 import tqdm
 import gpytorch

@@ -8,9 +8,10 @@
 
 """
 
-
 import numpy as np
 from bposd.css import css_code
+
+
 class StabilizerCode():
     def __init__(self,h) -> None:
         self.h = h

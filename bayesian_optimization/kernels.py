@@ -5,18 +5,13 @@
 from gpytorch.kernels import Kernel,RBFKernel,ScaleKernel
 import torch
 from torch import nn
-from torch.nn import ReLU,Sequential
 import torch.nn.functional as F
 from collections import defaultdict, Counter
-import networkx as nx
 
 from torch_geometric.nn import GCNConv,global_mean_pool
 from topomodelx.nn.combinatorial.hmc import HMC
 from torch_geometric.utils import dense_to_sparse
 from torch_geometric.data import Data, Batch
-
-from topomodelx.nn.combinatorial.hmc import  HMCLayer
-
 
 
 class GNNEmbedding(nn.Module):

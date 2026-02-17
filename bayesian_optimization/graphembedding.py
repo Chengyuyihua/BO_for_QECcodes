@@ -1,18 +1,13 @@
-from gpytorch.kernels import Kernel,RBFKernel,ScaleKernel
 import torch
 from torch import nn
-from torch.nn import ReLU,Sequential
-import torch.nn.functional as F
-from collections import defaultdict, Counter
-import networkx as nx
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv,global_mean_pool
-from topomodelx.nn.combinatorial.hmc import HMC
 from torch_geometric.utils import dense_to_sparse
 from torch_geometric.data import Data, Batch
-from topomodelx.nn.combinatorial.hmc import  HMCLayer
-from torch_geometric.nn import TransformerConv, global_mean_pool
-from torch_geometric.nn import GINConv, global_mean_pool, BatchNorm
+from torch_geometric.nn import TransformerConv
+from torch_geometric.nn import GINConv
+
+
 class GraphRegressor(nn.Module):
     def __init__(self,n,nx,nz,hidden_channel = 128, embedding_mode='GIN'):
         super().__init__()
@@ -76,13 +71,8 @@ class GraphEmbedder(nn.Module):
 
 
 
-from torch_geometric.nn import GINConv, global_mean_pool, GraphNorm
-import torch.nn.functional as F
 from torch import nn
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch_geometric.nn import GCNConv, global_mean_pool
 class GCNEmbedder_WithLogicalOperators(nn.Module):
     def __init__(self,hidden_dim,num_layers):
         super().__init__()
@@ -282,10 +272,8 @@ class GraphTransformerEmbedder(GraphEmbedder):
         # 4) global readout
         out = global_mean_pool(h, batch.batch)
         return out  # [batch_size, hidden_dim]
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch_geometric.nn import GATv2Conv, global_mean_pool, global_max_pool, global_add_pool
+from torch_geometric.nn import GATv2Conv, global_max_pool, global_add_pool
 
 class eGraphTransformerEmbedder(GraphEmbedder):
     def __init__(self, n, nx, nz,

@@ -1,5 +1,3 @@
-device = 'cuda'
-DEVICE = 'cuda'
 import random
 import numpy as np
 import torch
@@ -8,23 +6,7 @@ from bayesian_optimization.objective_function import ObjectiveFunction
 from bayesian_optimization.encoder import *
 from bayesian_optimization.chaincomplexembedding import *
 from bayesian_optimization.gp import *
-import gpytorch
-from gpytorch.mlls import ExactMarginalLogLikelihood
-from gpytorch.distributions import MultivariateNormal
-from gpytorch.kernels import RBFKernel, MaternKernel, SpectralMixtureKernel, ScaleKernel
-import copy
-from typing import Dict, Optional, Tuple, Any, List
 
-import torch
-import gpytorch
-from gpytorch.mlls import ExactMarginalLogLikelihood
-from torch.nn.utils import clip_grad_norm_
-import math
-from dataclasses import dataclass, asdict
-from typing import Tuple, Union, Dict, Any
-
-from torch.distributions.normal import Normal
-from bayesian_optimization.bo import BO_on_QEC
 
 def set_all_seeds(seed: int = 42):
     random.seed(seed)
@@ -34,6 +16,8 @@ def set_all_seeds(seed: int = 42):
     torch.cuda.manual_seed_all(seed)  
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+    
 class Get_new_points_function():
     def __init__(self,method='qc-ldpc-hgp',hyperparameters = {'p': 2, 'q': 6, 'm': 2},encode='None'):
         self.method = method

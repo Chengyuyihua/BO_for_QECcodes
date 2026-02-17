@@ -6,16 +6,13 @@ import numpy as np
 from evaluation.css_decode_sim import css_decode_sim
 
 from bposd.hgp import hgp
-from ldpc.codes import rep_code
-from scipy.linalg import null_space
 from scipy.special import comb
-from itertools import product
-from math import floor
 import matplotlib.pyplot as plt
 from bposd import bposd_decoder
 from ldpc.bplsd_decoder import BpLsdDecoder
-import itertools
 from bposd.css import css_code
+
+
 def binomial_probability(n, d_e,p_p):
     return comb(n, d_e) * (p_p ** d_e) * ((1 - p_p) ** (n - d_e))
 def gf2_rref(H):
