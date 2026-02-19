@@ -78,19 +78,22 @@ class BO_on_QEC:
         If True, fit normalizer with initial pl, sync trainer, and perform
         one warmup training round before BO starts.
     """
-    def __init__(self,
-                 gp,
-                 gp_trainer,                 # GPTrainer instance
-                 acquisition_function,       # EI with internal normalizer
-                 suggest_next,
-                 objective_function,         # (x_single_np) -> (F, pL_total)
-                 initial_X: torch.Tensor,
-                 initial_pl: torch.Tensor,   # probability space (pl)
-                 initial_y: torch.Tensor,    # objective space (F)
-                 BO_iterations=10,
-                 description='',
-                 device="cpu",
-                 pretrain=True):
+
+    def __init__(
+        self,
+        gp,
+        gp_trainer,  # GPTrainer instance
+        acquisition_function,  # EI with internal normalizer
+        suggest_next,
+        objective_function,  # (x_single_np) -> (F, pL_total)
+        initial_X: torch.Tensor,
+        initial_pl: torch.Tensor,  # probability space (pl)
+        initial_y: torch.Tensor,  # objective space (F)
+        BO_iterations=10,
+        description="",
+        device="cpu",
+        pretrain=True,
+    ):
 
         self.gp = gp
         self.trainer = gp_trainer
@@ -99,16 +102,18 @@ class BO_on_QEC:
         self.suggest_next = suggest_next
         self.device = device
 
-        self.X  = initial_X.to(self.device, dtype=torch.float32)
-        self.pl = initial_pl.to(self.device, dtype=torch.float32)   # probability space labels
-        self.y  = initial_y.to(self.device, dtype=torch.float32)    # objective values F
+        self.X = initial_X.to(self.device, dtype=torch.float32)
+        self.pl = initial_pl.to(
+            self.device, dtype=torch.float32
+        )  # probability space labels
+        self.y = initial_y.to(self.device, dtype=torch.float32)  # objective values F
 
         self.BO_iterations = int(BO_iterations)
         self.description = description
 
         self.best_value = self.y.max()
         self.best_parameters = self.X[self.y.argmax()].clone()
-        print(f'Initial best value: {self.best_value.item():.4f}')
+        print(f"Initial best value: {self.best_value.item():.4f}")
 
         # Online diagnostic log: per-iteration list of records (dicts)
         self.pred_vs_true_history = []
@@ -177,9 +182,11 @@ class BO_on_QEC:
         pbar = tqdm.tqdm(range(self.BO_iterations), desc=self.description)
 
         # TSV for online diagnostics (pred vs. true); easy to inspect externally.
-        metrics_tsv = open('pred_vs_true.tsv', 'a', encoding='utf-8')
+        metrics_tsv = open("pred_vs_true.tsv", "a", encoding="utf-8")
         if metrics_tsv.tell() == 0:
-            metrics_tsv.write("round\tidx\tmu_pl\tstd_pl\tpl_true\tr_pl\tz_true\tmu_z\tstd_z\tr_z\tcover68_pl\tcover95_pl\n")
+            metrics_tsv.write(
+                "round\tidx\tmu_pl\tstd_pl\tpl_true\tr_pl\tz_true\tmu_z\tstd_z\tr_z\tcover68_pl\tcover95_pl\n"
+            )
 
         for rnd in pbar:
             # --- Step 0: refresh EI's incumbent best objective ---
@@ -197,20 +204,30 @@ class BO_on_QEC:
             if not self.acquisition_function.normalizer.is_fitted():
                 # Should not happen in practice (pretraining/previous rounds fit it).
                 self.acquisition_function.update_normalizer(self.pl)
-            mu_pl_pred, std_pl_pred = self.acquisition_function.normalizer.inverse_mean_std(mu_z_pred, std_z_pred)
+            mu_pl_pred, std_pl_pred = (
+                self.acquisition_function.normalizer.inverse_mean_std(
+                    mu_z_pred, std_z_pred
+                )
+            )
             mu_pl_pred = mu_pl_pred.clamp(1e-12, 1.0 - 1e-12)
             std_pl_pred = std_pl_pred.clamp_min(1e-12)
 
             # --- Step 2: single-sample evaluations (objective & true pl) ---
             y_list, pl_list = [], []
-            next_points_np = next_points.detach().round().clamp(0, 1).cpu().numpy().astype("int64")
+            next_points_np = (
+                next_points.detach().round().clamp(0, 1).cpu().numpy().astype("int64")
+            )
             for i in range(next_points_np.shape[0]):
                 y_i, pl_i = self.objective_function(next_points_np[i])
                 y_list.append(float(y_i) if torch.is_tensor(y_i) else y_i)
                 pl_list.append(float(pl_i) if torch.is_tensor(pl_i) else pl_i)
 
-            next_values = torch.tensor(y_list,  dtype=torch.float32, device=self.device)  # objective F
-            next_pl     = torch.tensor(pl_list, dtype=torch.float32, device=self.device)  # true pl
+            next_values = torch.tensor(
+                y_list, dtype=torch.float32, device=self.device
+            )  # objective F
+            next_pl = torch.tensor(
+                pl_list, dtype=torch.float32, device=self.device
+            )  # true pl
             t_evaluated = time.time()
 
             evaluation_history.append(next_values.detach().cpu().tolist())
@@ -218,15 +235,23 @@ class BO_on_QEC:
             # --- Step 2b: record online diagnostics (pred vs. true) ---
             iter_metrics = []
             # Map true pl to z-space using the same normalizer.
-            z_true_all = self.acquisition_function.normalizer.transform(next_pl).detach()
+            z_true_all = self.acquisition_function.normalizer.transform(
+                next_pl
+            ).detach()
             for i in range(next_pl.numel()):
-                mu_z = mu_z_pred[i]; sz = std_z_pred[i].clamp_min(1e-12)
-                mu_pl = mu_pl_pred[i]; sp = std_pl_pred[i].clamp_min(1e-12)
+                mu_z = mu_z_pred[i]
+                sz = std_z_pred[i].clamp_min(1e-12)
+                mu_pl = mu_pl_pred[i]
+                sp = std_pl_pred[i].clamp_min(1e-12)
                 pl_t = next_pl[i]
                 z_t = z_true_all[i]
 
-                r_pl = float(((pl_t - mu_pl) / sp).item())  # standardized residual in pl-space
-                r_z  = float(((z_t  - mu_z)  / sz).item())  # standardized residual in z-space
+                r_pl = float(
+                    ((pl_t - mu_pl) / sp).item()
+                )  # standardized residual in pl-space
+                r_z = float(
+                    ((z_t - mu_z) / sz).item()
+                )  # standardized residual in z-space
                 cover68 = abs(r_pl) <= 1.0
                 cover95 = abs(r_pl) <= 1.96
 
@@ -256,9 +281,9 @@ class BO_on_QEC:
             self.pred_vs_true_history.append(iter_metrics)
 
             # --- Step 3: expand dataset with new points ---
-            self.X  = torch.cat((self.X,  next_points), dim=0)
-            self.y  = torch.cat((self.y,  next_values), dim=0)
-            self.pl = torch.cat((self.pl, next_pl),     dim=0)
+            self.X = torch.cat((self.X, next_points), dim=0)
+            self.y = torch.cat((self.y, next_values), dim=0)
+            self.pl = torch.cat((self.pl, next_pl), dim=0)
 
             # --- Step 3b: refit normalizer on latest pl and warm-train GP ---
             t1 = time.time()
@@ -288,18 +313,20 @@ class BO_on_QEC:
             if nb.item() > self.best_value.item():
                 self.best_value = nb
                 self.best_parameters = np_best.clone()
-                best_y_paras.append([
-                    self.best_value.item(),
-                    self.best_parameters.detach().cpu().numpy().tolist()
-                ])
+                best_y_paras.append(
+                    [
+                        self.best_value.item(),
+                        self.best_parameters.detach().cpu().numpy().tolist(),
+                    ]
+                )
                 print(f"new code updated: {[best_y_paras[-1][0], best_y_paras[-1][1]]}")
 
             # --- Step 5: progress bar & logging ---
             pbar.set_description(
-                f'{self.description} (Best value: {self.best_value.item():.4f}), '
-                f'time: suggest {t_next - t0:.3f}, eval {t_evaluated - t_next:.3f}, train {t_train - t1:.3f}'
+                f"{self.description} (Best value: {self.best_value.item():.4f}), "
+                f"time: suggest {t_next - t0:.3f}, eval {t_evaluated - t_next:.3f}, train {t_train - t1:.3f}"
             )
-            with open('result.txt', 'a', encoding='utf-8') as f:
+            with open("result.txt", "a", encoding="utf-8") as f:
                 f.write(
                     f"{self.description} (Best value: {self.best_value.item():.6f}), "
                     f"time: suggesting {t_next - t0:.6f}, evaluate {t_evaluated - t_next:.6f}, training {t_train - t1:.6f}\n"

@@ -1,7 +1,7 @@
 # Todo:
 # add more BO experiments;
-device = 'cuda'
-DEVICE = 'cuda'
+device = "cuda"
+DEVICE = "cuda"
 import random
 import numpy as np
 import torch
@@ -24,13 +24,17 @@ from dataclasses import dataclass, asdict
 
 
 class HillClimbing:
-    def __init__(self, next_points_num, gnp, acquisition, device="cuda", validator=None):
+    def __init__(
+        self, next_points_num, gnp, acquisition, device="cuda", validator=None
+    ):
 
         self.next_points_num = int(next_points_num)
         self.gnp = gnp
         self.acquisition = acquisition
         self.device = device
-        self.validator = validator  # 例如 lambda z: code_constructor.construct(z).k != 0
+        self.validator = (
+            validator  # 例如 lambda z: code_constructor.construct(z).k != 0
+        )
 
     def hill_climbing_neighbors(self, x: torch.Tensor) -> torch.Tensor:
 
@@ -48,7 +52,7 @@ class HillClimbing:
     def __call__(self, gp) -> torch.Tensor:
 
         # 起点：np -> torch.float32 on device
-        X0_np = self.gnp(self.next_points_num)                 # [n, d], 0/1
+        X0_np = self.gnp(self.next_points_num)  # [n, d], 0/1
         X0 = torch.tensor(X0_np, dtype=torch.float32, device=self.device)
 
         best_list = []
@@ -73,21 +77,22 @@ class HillClimbing:
 
         cand = torch.stack(best_list, dim=0)  # [n, d], float32, 0/1
 
-
         if self.validator is not None:
             cand_np = cand.detach().cpu().numpy().astype(np.int64)
             for i in range(cand_np.shape[0]):
                 if not self.validator(cand_np[i]):
-
                     tries = 0
                     while not self.validator(cand_np[i]):
                         tries += 1
-                        cand_np[i] = np.random.randint(0, 2, cand_np[i].shape, dtype=np.int64)
+                        cand_np[i] = np.random.randint(
+                            0, 2, cand_np[i].shape, dtype=np.int64
+                        )
                         if tries > 1000:
-                            break  
+                            break
             cand = torch.tensor(cand_np, dtype=torch.float32, device=self.device)
 
         return cand  # [n, d], float32(0/1), on device
+
 
 class EIAcquisitionFunction:
     """
@@ -120,21 +125,37 @@ class EIAcquisitionFunction:
         Epsilon used in log(pl + eps) transform.
     """
 
-    def __init__(self, pl_to_obj_fn, best_value=None, jitter=1e-2, eps=1e-9,
-                 device="cpu", normalizer=None, prob_lower=1e-12, prob_upper=1.0 - 1e-12,
-                 log_eps=1e-8):
+    def __init__(
+        self,
+        pl_to_obj_fn,
+        best_value=None,
+        jitter=1e-2,
+        eps=1e-9,
+        device="cpu",
+        normalizer=None,
+        prob_lower=1e-12,
+        prob_upper=1.0 - 1e-12,
+        log_eps=1e-8,
+    ):
         self.pl_to_obj_fn = pl_to_obj_fn
-        self.best_value   = best_value
-        self.jitter       = float(jitter)
-        self.eps          = float(eps)
-        self.device       = device
-        self.prob_lower   = float(prob_lower)
-        self.prob_upper   = float(prob_upper)
-        self.log_eps      = float(log_eps)
+        self.best_value = best_value
+        self.jitter = float(jitter)
+        self.eps = float(eps)
+        self.device = device
+        self.prob_lower = float(prob_lower)
+        self.prob_upper = float(prob_upper)
+        self.log_eps = float(log_eps)
 
         # EI maintains its own normalizer; create one if not provided.
-        self.normalizer = normalizer if normalizer is not None else LogStdNormalizer(
-            eps=self.log_eps, device=self.device, min_prob=self.prob_lower, max_prob=self.prob_upper
+        self.normalizer = (
+            normalizer
+            if normalizer is not None
+            else LogStdNormalizer(
+                eps=self.log_eps,
+                device=self.device,
+                min_prob=self.prob_lower,
+                max_prob=self.prob_upper,
+            )
         )
 
     # ---------- Interface exposed to BO loop ----------
@@ -163,9 +184,11 @@ class EIAcquisitionFunction:
             return ret[0], ret[1]
         if isinstance(ret, dict):
             mu = ret.get("mean", ret.get("mu"))
-            sd = ret.get("std",  ret.get("sigma"))
+            sd = ret.get("std", ret.get("sigma"))
             if mu is None or sd is None:
-                raise RuntimeError("pl_to_obj_fn dict must contain mean/std (or mu/sigma).")
+                raise RuntimeError(
+                    "pl_to_obj_fn dict must contain mean/std (or mu/sigma)."
+                )
             return mu, sd
         raise RuntimeError(f"Unsupported return type from pl_to_obj_fn: {type(ret)}")
 
@@ -182,7 +205,9 @@ class EIAcquisitionFunction:
                  EI(x) = (μ_f - f* - ξ) Φ(Z) + σ_f φ(Z),
              where Z = (μ_f - f* - ξ) / σ_f, Φ = CDF, φ = PDF of standard normal.
         """
-        assert self.best_value is not None, "best_value not set; call set_best_value() first."
+        assert self.best_value is not None, (
+            "best_value not set; call set_best_value() first."
+        )
 
         # Ensure X is a proper tensor on the correct device
         if not torch.is_tensor(X):
@@ -198,11 +223,11 @@ class EIAcquisitionFunction:
 
         # Posterior in latent z-domain
         with gpytorch.settings.fast_pred_var():
-            if hasattr(gp, "posterior"):    # BoTorch-style API
+            if hasattr(gp, "posterior"):  # BoTorch-style API
                 post = gp.posterior(X)
                 mu_lat = post.mean.reshape(-1)
                 var_lat = post.variance.reshape(-1)
-            else:                           # Pure GPyTorch model
+            else:  # Pure GPyTorch model
                 mvn = gp(X)
                 mu_lat = mvn.mean.reshape(-1)
                 var_lat = mvn.variance.reshape(-1)
@@ -211,7 +236,9 @@ class EIAcquisitionFunction:
 
         # Convert (μ_z, σ_z) → probability domain
         if not self.normalizer.is_fitted():
-            raise RuntimeError("EI normalizer is not fitted. Call update_normalizer(pl_train) first.")
+            raise RuntimeError(
+                "EI normalizer is not fitted. Call update_normalizer(pl_train) first."
+            )
         mu_pl, std_pl = self.normalizer.inverse_mean_std(mu_lat, std_lat)
 
         # Clamp probability and std for stability
@@ -224,8 +251,16 @@ class EIAcquisitionFunction:
         for i in range(mu_pl.numel()):
             out = self.pl_to_obj_fn(X[i], mu_pl[i], std_pl[i])
             mu_i, sd_i = self._take_mean_std(out)
-            mu_obj[i] = mu_i if torch.is_tensor(mu_i) else torch.tensor(mu_i, device=self.device, dtype=torch.float32)
-            std_obj[i] = sd_i if torch.is_tensor(sd_i) else torch.tensor(sd_i, device=self.device, dtype=torch.float32)
+            mu_obj[i] = (
+                mu_i
+                if torch.is_tensor(mu_i)
+                else torch.tensor(mu_i, device=self.device, dtype=torch.float32)
+            )
+            std_obj[i] = (
+                sd_i
+                if torch.is_tensor(sd_i)
+                else torch.tensor(sd_i, device=self.device, dtype=torch.float32)
+            )
 
         std_obj = std_obj.clamp_min(self.eps)
 
@@ -236,15 +271,17 @@ class EIAcquisitionFunction:
         ei = imp * normal.cdf(Z) + std_obj * torch.exp(normal.log_prob(Z))
         return ei
 
+
 TensorLike = Union[torch.Tensor, np.ndarray, float]
 
 
 @dataclass
 class LogStdStats:
     """Stores the fitted statistics (mean, std, eps) for log-domain normalization."""
-    mean: float   # mean of log(pl + eps)
+
+    mean: float  # mean of log(pl + eps)
     scale: float  # std of log(pl + eps)
-    eps: float    # epsilon used in log(pl + eps)
+    eps: float  # epsilon used in log(pl + eps)
 
 
 class LogStdNormalizer:
@@ -255,7 +292,13 @@ class LogStdNormalizer:
 
     """
 
-    def __init__(self, eps: float = 1e-8, min_prob: float = 1e-12, max_prob: float = 1.0 - 1e-12, device: str = "cpu"):
+    def __init__(
+        self,
+        eps: float = 1e-8,
+        min_prob: float = 1e-12,
+        max_prob: float = 1.0 - 1e-12,
+        device: str = "cpu",
+    ):
         self.stats: LogStdStats = LogStdStats(mean=0.0, scale=1.0, eps=float(eps))
         self._fitted: bool = False
         self.min_prob = float(min_prob)
@@ -284,7 +327,7 @@ class LogStdNormalizer:
         pl_t = self._clamp_prob(pl_t)
         ylog = torch.log(pl_t + self.stats.eps)
         mean = ylog.mean().item()
-        std  = ylog.std(unbiased=False).item()  # population standard deviation
+        std = ylog.std(unbiased=False).item()  # population standard deviation
 
         # Avoid degenerate scaling (very small std can cause instability)
         if std < 1e-12:
@@ -322,7 +365,9 @@ class LogStdNormalizer:
 
     # -------------------- Posterior inverse transform (used in EI acquisition) --------------------
     @torch.no_grad()
-    def inverse_mean_std(self, mu_z: TensorLike, std_z: TensorLike) -> Tuple[torch.Tensor, torch.Tensor]:
+    def inverse_mean_std(
+        self, mu_z: TensorLike, std_z: TensorLike
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         If z ~ N(mu_z, std_z^2), then log(pl + eps) ~ N(mu, std^2), where:
             mu  = mu_z * scale + mean
@@ -336,19 +381,19 @@ class LogStdNormalizer:
             (mean_pl, std_pl): expected mean and std of pl in probability domain.
         """
         assert self._fitted, "Call fit(pl_train) before inverse_mean_std."
-        mu_z_t  = self._to_tensor(mu_z, dtype=torch.float32)
+        mu_z_t = self._to_tensor(mu_z, dtype=torch.float32)
         std_z_t = self._to_tensor(std_z, dtype=torch.float32).abs()
 
-        mu  = mu_z_t * self.stats.scale + self.stats.mean
+        mu = mu_z_t * self.stats.scale + self.stats.mean
         std = std_z_t * abs(self.stats.scale)
 
         # E[pl + eps] and Var(pl + eps)
         exp_half_var = torch.exp(0.5 * std**2)
         mean_pl_plus = torch.exp(mu) * exp_half_var
-        var_pl_plus  = (torch.exp(std**2) - 1.0) * torch.exp(2.0 * mu + std**2)
+        var_pl_plus = (torch.exp(std**2) - 1.0) * torch.exp(2.0 * mu + std**2)
 
         mean_pl = mean_pl_plus - self.stats.eps
-        std_pl  = var_pl_plus.clamp_min(1e-30).sqrt()
+        std_pl = var_pl_plus.clamp_min(1e-30).sqrt()
 
         # Clamp mean within valid probability range
         mean_pl = self._clamp_prob(mean_pl)
@@ -374,17 +419,20 @@ class LogStdNormalizer:
             "fitted": self._fitted,
             "min_prob": self.min_prob,
             "max_prob": self.max_prob,
-            "device": self.device
+            "device": self.device,
         }
 
     def load_state_dict(self, state: Dict[str, Any]):
         """Restore normalizer state from a dict."""
         s = state["stats"]
-        self.stats = LogStdStats(mean=float(s["mean"]), scale=float(s["scale"]), eps=float(s["eps"]))
+        self.stats = LogStdStats(
+            mean=float(s["mean"]), scale=float(s["scale"]), eps=float(s["eps"])
+        )
         self._fitted = bool(state.get("fitted", True))
         self.min_prob = float(state.get("min_prob", self.min_prob))
         self.max_prob = float(state.get("max_prob", self.max_prob))
         self.device = state.get("device", self.device)
+
 
 class GPTrainer:
     """
@@ -402,28 +450,26 @@ class GPTrainer:
         self,
         model: gpytorch.models.ExactGP,
         device: str = "cpu",
-
         training_iter: int = 80,
-        lr: Optional[Dict[str, float]] = None,          # {'embed':4e-4,'mean':1e-3,'kernel':1e-3,'like':2e-2}
+        lr: Optional[
+            Dict[str, float]
+        ] = None,  # {'embed':4e-4,'mean':1e-3,'kernel':1e-3,'like':2e-2}
         weight_decay: float = 1e-4,
         max_grad_norm: float = 2.0,
         optimizer_type: str = "adamw",
         recreate_optimizer_each_round: bool = True,
-
-        scheduler_cfg: Optional[Dict[str, Any]] = None, # {'factor':0.5,'patience':5,'min_lr':1e-6}
-        early_stopping: Optional[Dict[str, Any]] = None,# {'patience':10,'tol':1e-4}
-
+        scheduler_cfg: Optional[
+            Dict[str, Any]
+        ] = None,  # {'factor':0.5,'patience':5,'min_lr':1e-6}
+        early_stopping: Optional[Dict[str, Any]] = None,  # {'patience':10,'tol':1e-4}
         use_priors: bool = True,
         priors_cfg: Optional[Dict[str, Dict[str, float]]] = None,
-        noise_floor: float = 1e-3,                      # lower bound (in z-domain) for likelihood noise
+        noise_floor: float = 1e-3,  # lower bound (in z-domain) for likelihood noise
         lengthscale_bounds: Optional[Tuple[float, float]] = None,
-
         warm_start: bool = True,
-        rescale_on_scaler_change: bool = True,          # alpha = old_std / new_std
+        rescale_on_scaler_change: bool = True,  # alpha = old_std / new_std
         carry_optimizer_state: bool = False,
-
-        freeze_cfg: Optional[Dict[str, Any]] = None,    # {'lengthscale_until_round': 2}
-
+        freeze_cfg: Optional[Dict[str, Any]] = None,  # {'lengthscale_until_round': 2}
         verbose: bool = True,
         log_every: Optional[int] = None,
         save_best_state: bool = True,
@@ -437,14 +483,18 @@ class GPTrainer:
         self.optimizer_type = optimizer_type.lower()
         self.recreate_optimizer_each_round = bool(recreate_optimizer_each_round)
 
-        self.scheduler_cfg = scheduler_cfg or {'factor': 0.5, 'patience': 5, 'min_lr': 1e-6}
-        self.early_stopping = early_stopping or {'patience': 10, 'tol': 1e-4}
+        self.scheduler_cfg = scheduler_cfg or {
+            "factor": 0.5,
+            "patience": 5,
+            "min_lr": 1e-6,
+        }
+        self.early_stopping = early_stopping or {"patience": 10, "tol": 1e-4}
 
         self.use_priors = bool(use_priors)
         self.priors_cfg = priors_cfg or {
-            'lengthscale': {'type': 'lognormal', 'loc': 0.0,  'scale': 0.5},
-            'outputscale': {'type': 'lognormal', 'loc': 0.0,  'scale': 0.5},
-            'noise':       {'type': 'lognormal', 'loc': -4.0, 'scale': 0.5},
+            "lengthscale": {"type": "lognormal", "loc": 0.0, "scale": 0.5},
+            "outputscale": {"type": "lognormal", "loc": 0.0, "scale": 0.5},
+            "noise": {"type": "lognormal", "loc": -4.0, "scale": 0.5},
         }
         self.noise_floor = float(noise_floor)
         self.lengthscale_bounds = lengthscale_bounds
@@ -453,12 +503,12 @@ class GPTrainer:
         self.rescale_on_scaler_change = bool(rescale_on_scaler_change)
         self.carry_optimizer_state = bool(carry_optimizer_state)
 
-        self.freeze_cfg = freeze_cfg or {'lengthscale_until_round': 0}
+        self.freeze_cfg = freeze_cfg or {"lengthscale_until_round": 0}
 
         self.verbose = bool(verbose)
         self.log_every = log_every
         self.save_best_state = bool(save_best_state)
-        self.lr = lr or {'embed': 4e-4, 'mean': 1e-3, 'kernel': 1e-3, 'like': 2e-2}
+        self.lr = lr or {"embed": 4e-4, "mean": 1e-3, "kernel": 1e-3, "like": 2e-2}
 
         # ---- State ----
         self._optimizer: Optional[torch.optim.Optimizer] = None
@@ -496,15 +546,17 @@ class GPTrainer:
             return
         alpha = float(old_std / new_std)
         with torch.no_grad():
-            if hasattr(self.model, "covar_module") and hasattr(self.model.covar_module, "outputscale"):
-                self.model.covar_module.outputscale.mul_(alpha ** 2)
+            if hasattr(self.model, "covar_module") and hasattr(
+                self.model.covar_module, "outputscale"
+            ):
+                self.model.covar_module.outputscale.mul_(alpha**2)
             try:
-                self.model.likelihood.noise.mul_(alpha ** 2)
+                self.model.likelihood.noise.mul_(alpha**2)
             except Exception:
                 # Fallback: attempt to read/set noise through likelihood noise_covar
                 try:
                     noise = self._get_noise_value()
-                    self._set_noise_value(noise * (alpha ** 2))
+                    self._set_noise_value(noise * (alpha**2))
                 except Exception:
                     pass
         self._last_scaler_std = new_std
@@ -514,9 +566,11 @@ class GPTrainer:
         Optionally freeze base kernel lengthscale parameters for early rounds.
         """
         self._round_idx = int(round_idx)
-        until = int(self.freeze_cfg.get('lengthscale_until_round', 0))
-        freeze = (round_idx <= until)
-        base_kernel = getattr(getattr(self.model, "covar_module", None), "base_kernel", None)
+        until = int(self.freeze_cfg.get("lengthscale_until_round", 0))
+        freeze = round_idx <= until
+        base_kernel = getattr(
+            getattr(self.model, "covar_module", None), "base_kernel", None
+        )
         if base_kernel is not None:
             for p in base_kernel.parameters():
                 p.requires_grad_(not freeze)
@@ -531,9 +585,14 @@ class GPTrainer:
           - best-state checkpointing (optional).
         """
         model = self.model
-        model.train(); model.likelihood.train()
+        model.train()
+        model.likelihood.train()
 
-        if self._optimizer is None or self.recreate_optimizer_each_round or not self.carry_optimizer_state:
+        if (
+            self._optimizer is None
+            or self.recreate_optimizer_each_round
+            or not self.carry_optimizer_state
+        ):
             self._optimizer = self._build_optimizer()
             self._scheduler = self._build_scheduler(self._optimizer)
         elif self._scheduler is None:
@@ -544,8 +603,8 @@ class GPTrainer:
         best_loss = float("inf")
         best_state = None
         no_improve = 0
-        patience = int(self.early_stopping.get('patience', 10))
-        tol = float(self.early_stopping.get('tol', 1e-4))
+        patience = int(self.early_stopping.get("patience", 10))
+        tol = float(self.early_stopping.get("tol", 1e-4))
         self._history = []
 
         train_x, train_y = model.train_inputs[0], model.train_targets
@@ -573,21 +632,29 @@ class GPTrainer:
                 if self.save_best_state:
                     best_state = {
                         "model": copy.deepcopy(model.state_dict()),
-                        "likelihood": copy.deepcopy(model.likelihood.state_dict())
+                        "likelihood": copy.deepcopy(model.likelihood.state_dict()),
                     }
             else:
                 no_improve += 1
 
-            if self.verbose and (self.log_every is None or it % max(1, self.log_every) == 0 or it == self.training_iter):
+            if self.verbose and (
+                self.log_every is None
+                or it % max(1, self.log_every) == 0
+                or it == self.training_iter
+            ):
                 ls_val = self._safe_get_lengthscale()
-                out_v  = self._safe_get_outputscale()
-                nz_v   = self._safe_get_noise()
-                print(f"[round {self._round_idx:>3d} | {it:>4d}/{self.training_iter}] "
-                      f"nll={cur:.4f}  len={ls_val}  out={out_v:.3e}  noise={nz_v:.3e}")
+                out_v = self._safe_get_outputscale()
+                nz_v = self._safe_get_noise()
+                print(
+                    f"[round {self._round_idx:>3d} | {it:>4d}/{self.training_iter}] "
+                    f"nll={cur:.4f}  len={ls_val}  out={out_v:.3e}  noise={nz_v:.3e}"
+                )
 
             if no_improve >= patience and rel_impr < tol:
                 if self.verbose:
-                    print(f"[round {self._round_idx:>3d}] early stop @ {it}, best nll={best_loss:.4f}")
+                    print(
+                        f"[round {self._round_idx:>3d}] early stop @ {it}, best nll={best_loss:.4f}"
+                    )
                 break
 
         if self.save_best_state and best_state is not None:
@@ -609,18 +676,40 @@ class GPTrainer:
     # ================= Internal Utilities =================
     def _build_optimizer(self) -> torch.optim.Optimizer:
         # Group parameters by module for separate learning rates.
-        params_embed  = list(getattr(self.model, "embed", torch.nn.Module()).parameters())
-        params_kernel = list(getattr(self.model, "covar_module", torch.nn.Module()).parameters())
-        params_like   = list(self.model.likelihood.parameters())
-        params_mean   = list(getattr(self.model, "mean_module", torch.nn.Module()).parameters())
+        params_embed = list(
+            getattr(self.model, "embed", torch.nn.Module()).parameters()
+        )
+        params_kernel = list(
+            getattr(self.model, "covar_module", torch.nn.Module()).parameters()
+        )
+        params_like = list(self.model.likelihood.parameters())
+        params_mean = list(
+            getattr(self.model, "mean_module", torch.nn.Module()).parameters()
+        )
 
         lr = self.lr
         # learning rate
         groups = [
-            {'params': params_embed,  'lr': lr.get('embed',  4e-4), 'weight_decay': self.weight_decay},
-            {'params': params_mean,   'lr': lr.get('mean',   1e-3), 'weight_decay': self.weight_decay},
-            {'params': params_kernel, 'lr': lr.get('kernel', 1e-3), 'weight_decay': self.weight_decay},
-            {'params': params_like,   'lr': lr.get('like',   2e-2), 'weight_decay': self.weight_decay/5},
+            {
+                "params": params_embed,
+                "lr": lr.get("embed", 4e-4),
+                "weight_decay": self.weight_decay,
+            },
+            {
+                "params": params_mean,
+                "lr": lr.get("mean", 1e-3),
+                "weight_decay": self.weight_decay,
+            },
+            {
+                "params": params_kernel,
+                "lr": lr.get("kernel", 1e-3),
+                "weight_decay": self.weight_decay,
+            },
+            {
+                "params": params_like,
+                "lr": lr.get("like", 2e-2),
+                "weight_decay": self.weight_decay / 5,
+            },
         ]
         if self.optimizer_type == "adam":
             return torch.optim.Adam(groups)
@@ -629,35 +718,43 @@ class GPTrainer:
     def _build_scheduler(self, optimizer) -> torch.optim.lr_scheduler.ReduceLROnPlateau:
         cfg = self.scheduler_cfg
         return torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min',
-            factor=float(cfg.get('factor', 0.5)),
-            patience=int(cfg.get('patience', 5)),
-            min_lr=float(cfg.get('min_lr', 1e-6))
+            optimizer,
+            mode="min",
+            factor=float(cfg.get("factor", 0.5)),
+            patience=int(cfg.get("patience", 5)),
+            min_lr=float(cfg.get("min_lr", 1e-6)),
         )
 
     def _register_priors_safely(self):
         """Attach priors to the **constrained** parameter names (lengthscale/outputscale/noise)."""
         from gpytorch.priors import LogNormalPrior
+
         # lengthscale prior
         try:
             bk = self.model.covar_module.base_kernel
-            loc = float(self.priors_cfg['lengthscale']['loc'])
-            scale = float(self.priors_cfg['lengthscale']['scale'])
-            bk.register_prior("lengthscale_prior", LogNormalPrior(loc, scale), "lengthscale")
+            loc = float(self.priors_cfg["lengthscale"]["loc"])
+            scale = float(self.priors_cfg["lengthscale"]["scale"])
+            bk.register_prior(
+                "lengthscale_prior", LogNormalPrior(loc, scale), "lengthscale"
+            )
         except Exception:
             pass
         # outputscale prior
         try:
-            loc = float(self.priors_cfg['outputscale']['loc'])
-            scale = float(self.priors_cfg['outputscale']['scale'])
-            self.model.covar_module.register_prior("outputscale_prior", LogNormalPrior(loc, scale), "outputscale")
+            loc = float(self.priors_cfg["outputscale"]["loc"])
+            scale = float(self.priors_cfg["outputscale"]["scale"])
+            self.model.covar_module.register_prior(
+                "outputscale_prior", LogNormalPrior(loc, scale), "outputscale"
+            )
         except Exception:
             pass
         # noise prior
         try:
-            loc = float(self.priors_cfg['noise']['loc'])
-            scale = float(self.priors_cfg['noise']['scale'])
-            self.model.likelihood.register_prior("noise_prior", LogNormalPrior(loc, scale), "noise")
+            loc = float(self.priors_cfg["noise"]["loc"])
+            scale = float(self.priors_cfg["noise"]["scale"])
+            self.model.likelihood.register_prior(
+                "noise_prior", LogNormalPrior(loc, scale), "noise"
+            )
         except Exception:
             pass
 
@@ -665,7 +762,10 @@ class GPTrainer:
         # Noise lower bound (constraint on raw_noise)
         try:
             self.model.likelihood.noise_covar.register_constraint(
-                "raw_noise", gpytorch.constraints.GreaterThan(torch.tensor(self.noise_floor, device=self.device))
+                "raw_noise",
+                gpytorch.constraints.GreaterThan(
+                    torch.tensor(self.noise_floor, device=self.device)
+                ),
             )
         except Exception:
             pass
@@ -698,7 +798,9 @@ class GPTrainer:
             return float(self.model.likelihood.noise.detach().cpu().item())
         except Exception:
             try:
-                return float(self.model.likelihood.noise_covar.noise.detach().cpu().item())
+                return float(
+                    self.model.likelihood.noise_covar.noise.detach().cpu().item()
+                )
             except Exception:
                 return float("nan")
 
@@ -708,46 +810,66 @@ class GPTrainer:
                 self.model.likelihood.noise.copy_(torch.tensor(v, device=self.device))
             except Exception:
                 try:
-                    self.model.likelihood.noise_covar.noise.copy_(torch.tensor(v, device=self.device))
+                    self.model.likelihood.noise_covar.noise.copy_(
+                        torch.tensor(v, device=self.device)
+                    )
                 except Exception:
                     pass
 
     def _safe_get_noise(self) -> float:
         return self._get_noise_value()
 
-class E():
-    def __init__(self,code_constructor,views_info ):
-        self.code_constructor = code_constructor
-        self.encoder = CSSEncoder(views_info,mode ='relations')
 
-    def encode_single(self,x):
-        return self.encoder.encode(self.code_constructor.construct(np.array(x).astype(int)))
-    def encode(self,x):
+class E:
+    def __init__(self, code_constructor, views_info):
+        self.code_constructor = code_constructor
+        self.encoder = CSSEncoder(views_info, mode="relations")
+
+    def encode_single(self, x):
+        return self.encoder.encode(
+            self.code_constructor.construct(np.array(x).astype(int))
+        )
+
+    def encode(self, x):
         # x: B views
         return [self.encode_single(i) for i in x]
+
+
 views_info = [
-  {"name":"decode",
-   "partite_classes":["SZ","DQ","SX"],
-   "relations":["SZ_DQ","DQ_SZ","DQ_SX","SX_DQ"],   
-   "weight_mode":"count", "log1p":True},
-  {"name":"xlogic",
-   "partite_classes":["DQ","SX","LX"],
-   "relations":["DQ_SX","SX_DQ","LX_DQ","DQ_LX"],
-   "weight_mode":"count", "log1p":True},
-  {"name":"zlogic",
-   "partite_classes":["SZ","DQ","LZ"],
-   "relations":["SZ_DQ","DQ_SZ","LZ_DQ","DQ_LZ"],
-   "weight_mode":"count", "log1p":True},
+    {
+        "name": "decode",
+        "partite_classes": ["SZ", "DQ", "SX"],
+        "relations": ["SZ_DQ", "DQ_SZ", "DQ_SX", "SX_DQ"],
+        "weight_mode": "count",
+        "log1p": True,
+    },
+    {
+        "name": "xlogic",
+        "partite_classes": ["DQ", "SX", "LX"],
+        "relations": ["DQ_SX", "SX_DQ", "LX_DQ", "DQ_LX"],
+        "weight_mode": "count",
+        "log1p": True,
+    },
+    {
+        "name": "zlogic",
+        "partite_classes": ["SZ", "DQ", "LZ"],
+        "relations": ["SZ_DQ", "DQ_SZ", "LZ_DQ", "DQ_LZ"],
+        "weight_mode": "count",
+        "log1p": True,
+    },
 ]
 
-def get_model_(X, y, kernel_type='ard_rbf', mean_type='linear', mean_input=64,embed_dim=128):
 
-    encoder = E(code_constructor,views_info)
+def get_model_(
+    X, y, kernel_type="ard_rbf", mean_type="linear", mean_input=64, embed_dim=128
+):
+
+    encoder = E(code_constructor, views_info)
 
     # NN embedder
     embedding = ChainComplexEmbedder(
         views_info=views_info,
-        d_model=embed_dim ,
+        d_model=embed_dim,
         num_layers=4,
         view_aggr="sum",
         num_bases=4,
@@ -757,19 +879,18 @@ def get_model_(X, y, kernel_type='ard_rbf', mean_type='linear', mean_input=64,em
         dropout=0.1,
     ).to(device)
 
-
-
     # kernel
-    if kernel_type == 'ard_rbf':
+    if kernel_type == "ard_rbf":
         base = RBFKernel(ard_num_dims=embed_dim)
         kernel = ScaleKernel(base)
-    elif kernel_type == 'matern':
+    elif kernel_type == "matern":
         base = MaternKernel(nu=1.5, ard_num_dims=embed_dim)
         kernel = ScaleKernel(base)
-    elif kernel_type == 'spectral_mixture':
+    elif kernel_type == "spectral_mixture":
         kernel = SpectralMixtureKernel(num_mixtures=4, ard_num_dims=embed_dim)
-    elif kernel_type == 'rbf_plus_periodic':
+    elif kernel_type == "rbf_plus_periodic":
         from gpytorch.kernels import PeriodicKernel
+
         rbf = ScaleKernel(RBFKernel(ard_num_dims=embed_dim))
         periodic = ScaleKernel(PeriodicKernel(ard_num_dims=embed_dim))
         kernel = rbf + periodic
@@ -784,7 +905,8 @@ def get_model_(X, y, kernel_type='ard_rbf', mean_type='linear', mean_input=64,em
     train_y = y.to(device).float().view(-1)
 
     gp = GaussianProcess_QEC(
-        train_x, train_y,
+        train_x,
+        train_y,
         likelihood=likelihood,
         kernel=kernel,
         encoder=encoder.encode,
@@ -794,67 +916,77 @@ def get_model_(X, y, kernel_type='ard_rbf', mean_type='linear', mean_input=64,em
     ).to(device)
 
     return gp
+
+
 def set_all_seeds(seed: int = 42):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)  
+    torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-class Get_new_points_function():
-    def __init__(self,method='qc-ldpc-hgp',code_constructor = None,encode='None'):
+
+
+class Get_new_points_function:
+    def __init__(self, method="qc-ldpc-hgp", code_constructor=None, encode="None"):
         self.method = method
         self.code_constructor = code_constructor
         self.encode = encode
         self.init = False
 
-    def get_new_points_function(self,number):
-        if self.method == 'qc-ldpc-hgp':
+    def get_new_points_function(self, number):
+        if self.method == "qc-ldpc-hgp":
             new_points = self.get_new_points_HGP(number)
-        elif self.method == 'bb':
+        elif self.method == "bb":
             new_points = self.get_new_bb_vector(number)
         return new_points
-        
-    def get_new_points_HGP(self,number):
-        return np.random.randint(0, self.hyperparameters['m'] + 1, (number, self.hyperparameters['p'] * self.hyperparameters['q']))
 
-    def get_new_bb_vector(self,number):
+    def get_new_points_HGP(self, number):
+        return np.random.randint(
+            0,
+            self.hyperparameters["m"] + 1,
+            (number, self.hyperparameters["p"] * self.hyperparameters["q"]),
+        )
+
+    def get_new_bb_vector(self, number):
         results = []
-        l = self.code_constructor.para_dict['l']
-        g = self.code_constructor.para_dict['g']
-        if self.init == False and l==12 and g==999:
-            print('best known bb code added to initial points')
-            self.init=True
+        l = self.code_constructor.para_dict["l"]
+        g = self.code_constructor.para_dict["g"]
+        if self.init == False and l == 12 and g == 999:
+            print("best known bb code added to initial points")
+            self.init = True
 
-            a = np.zeros((l+g-1)*2)
-            a[3]=1
-            a[11+1]=1
-            a[11+2]=1
-            a[17+1]=1
-            a[17+2]=1
-            a[17+11+3]=1
+            a = np.zeros((l + g - 1) * 2)
+            a[3] = 1
+            a[11 + 1] = 1
+            a[11 + 2] = 1
+            a[17 + 1] = 1
+            a[17 + 2] = 1
+            a[17 + 11 + 3] = 1
             results.append(a)
 
-        while number>0:
-            new_point = np.random.randint(0,2, size=(l+g-1)*2)
+        while number > 0:
+            new_point = np.random.randint(0, 2, size=(l + g - 1) * 2)
             c = self.code_constructor.construct(new_point)
-            if c.k==0:
+            if c.k == 0:
                 continue
             else:
                 results.append(new_point)
                 number -= 1
         return np.array(results)
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
     import pickle
     import sys
-    
+
     if len(sys.argv) == 3:
-        seed= int(sys.argv[1])
+        seed = int(sys.argv[1])
         dataset_index = int(sys.argv[2])
         lambda_ = 1
-    elif len(sys.argv) >3:
-        seed= int(sys.argv[1])
+    elif len(sys.argv) > 3:
+        seed = int(sys.argv[1])
         dataset_index = int(sys.argv[2])
         lambda_ = float(sys.argv[3])
     else:
@@ -864,22 +996,26 @@ if __name__ == '__main__':
 
     set_all_seeds(seed)
     l = 12
-    g = 6 # g here is m in Bravyi et al's paper
-    print(f'(l,g)=({l},{g}), dataset_index = {dataset_index}, seed={seed}, lambda = {lambda_}')
-    
-    
-    para_dict = {'l':l,'g':g}
-    code_class = 'bb'
+    g = 6  # g here is m in Bravyi et al's paper
+    print(
+        f"(l,g)=({l},{g}), dataset_index = {dataset_index}, seed={seed}, lambda = {lambda_}"
+    )
 
-    
-    code_constructor = CodeConstructor(method=code_class,para_dict = para_dict)
+    para_dict = {"l": l, "g": g}
+    code_class = "bb"
+
+    code_constructor = CodeConstructor(method=code_class, para_dict=para_dict)
     # define objective function
-    pp=0.05
-    Obj_Func = ObjectiveFunction(code_constructor,lambda_ = lambda_, pp=pp,decoder_param={'trail':10_000})
+    pp = 0.05
+    Obj_Func = ObjectiveFunction(
+        code_constructor, lambda_=lambda_, pp=pp, decoder_param={"trail": 10_000}
+    )
     obj_func = Obj_Func.forward
     pl_to_obj = Obj_Func.pl_to_obj_with_std
     # method of sampling new points
-    gnp = Get_new_points_function(method=code_class,code_constructor=code_constructor).get_new_points_function
+    gnp = Get_new_points_function(
+        method=code_class, code_constructor=code_constructor
+    ).get_new_points_function
     # initial points:
     # init_num = 20
     # X_init = gnp(init_num)
@@ -889,123 +1025,121 @@ if __name__ == '__main__':
     #     y,pl = obj_func(x)
     #     y_init.append(y)
     #     pl_init.append(pl)
-    if l ==6 and g==3:
+    if l == 6 and g == 3:
         if lambda_ == 1:
-            init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_1.0_63.pkl"
+            init_data_file = (
+                f"./data/BO_initial_points/BO_initial_points_{dataset_index}_1.0_63.pkl"
+            )
         else:
             init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_{lambda_}_63.pkl"
 
     else:
         if lambda_ == 1:
-            init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_1.0.pkl"
+            init_data_file = (
+                f"./data/BO_initial_points/BO_initial_points_{dataset_index}_1.0.pkl"
+            )
         else:
             init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_{lambda_}.pkl"
     # file with 63 suffix has (l,m)=(6,3). Otherwise (l,m)=(12,6)
     with open(init_data_file, "rb") as f:
         data = pickle.load(f)
-        X_init = data['X']
-        y_init = data['y']
-        pl_init = data['pl']
+        X_init = data["X"]
+        y_init = data["y"]
+        pl_init = data["pl"]
 
-    X_init = torch.tensor(X_init,dtype=torch.float32)
+    X_init = torch.tensor(X_init, dtype=torch.float32)
     X_init.to(DEVICE)
-    y_init = torch.tensor(y_init,dtype=torch.float32)
+    y_init = torch.tensor(y_init, dtype=torch.float32)
     y_init.to(DEVICE)
-    pl_init = torch.tensor(pl_init,dtype=torch.float32)
+    pl_init = torch.tensor(pl_init, dtype=torch.float32)
     pl_init.to(DEVICE)
     # get gp model
     model = get_model_(
         X_init,
         pl_init,
-        kernel_type='matern',
-        mean_type='linear',
+        kernel_type="matern",
+        mean_type="linear",
         mean_input=128,
     )
     # gp trainer
     trainer = GPTrainer(
         model=model,
         device=DEVICE,
-
         # --- Training and regularization ---
         training_iter=80,
-        lr={'embed': 4e-4, 'mean': 1e-3, 'kernel': 1e-3, 'like': 2e-2},
+        lr={"embed": 4e-4, "mean": 1e-3, "kernel": 1e-3, "like": 2e-2},
         weight_decay=1e-4,
         max_grad_norm=2.0,
-        optimizer_type='adamw',
+        optimizer_type="adamw",
         recreate_optimizer_each_round=True,
-
         # --- Scheduler and early stopping ---
-        scheduler_cfg={'factor': 0.5, 'patience': 5, 'min_lr': 1e-6},
-        early_stopping={'patience': 10, 'tol': 1e-4},
-
+        scheduler_cfg={"factor": 0.5, "patience": 5, "min_lr": 1e-6},
+        early_stopping={"patience": 10, "tol": 1e-4},
         # --- Priors and constraints (helpful for small datasets) ---
         use_priors=True,
-        noise_floor=1e-3,                 # Lower bound for z-domain noise to avoid overfitting
-        lengthscale_bounds=None,          # If X is normalized to [0,1], one may use (1e-2, 10.)
-
+        noise_floor=1e-3,  # Lower bound for z-domain noise to avoid overfitting
+        lengthscale_bounds=None,  # If X is normalized to [0,1], one may use (1e-2, 10.)
         # --- Warm start and scaler rescaling ---
         warm_start=True,
-        rescale_on_scaler_change=True,    # Recommended: True
+        rescale_on_scaler_change=True,  # Recommended: True
         carry_optimizer_state=False,
-
         # --- Freeze base kernel lengthscale in early rounds (stabilizes small-data regime) ---
-        freeze_cfg={'lengthscale_until_round': 2},
-
+        freeze_cfg={"lengthscale_until_round": 2},
         verbose=True,
         log_every=8,
         save_best_state=True,
     )
     # acquisition function:
     acq = EIAcquisitionFunction(
-        pl_to_obj_fn = pl_to_obj,
-        best_value   = None,            
-        jitter       = 1e-2,
-        eps          = 1e-9,
-        device       = DEVICE,
-        normalizer   = None,            
-        prob_lower   = 1e-12,
-        prob_upper   = 1.0 - 1e-12,
-        log_eps      = 1e-8
+        pl_to_obj_fn=pl_to_obj,
+        best_value=None,
+        jitter=1e-2,
+        eps=1e-9,
+        device=DEVICE,
+        normalizer=None,
+        prob_lower=1e-12,
+        prob_upper=1.0 - 1e-12,
+        log_eps=1e-8,
     )
+
     # hill climbing:
     def bb_validator(candidate_np):
         return code_constructor.construct(candidate_np).k != 0
+
     next_points_num = 4
 
     hc = HillClimbing(
-        next_points_num = next_points_num,       # the candidate number
-        gnp             = gnp,      # get new points function
-        acquisition     = acq,      
-        device          = DEVICE,
-        validator       = bb_validator
+        next_points_num=next_points_num,  # the candidate number
+        gnp=gnp,  # get new points function
+        acquisition=acq,
+        device=DEVICE,
+        validator=bb_validator,
     )
     # assemble BO
     bo_iterations = 50
     bo = BO_on_QEC(
-        gp                   = model,
-        gp_trainer           = trainer,           
-        acquisition_function = acq,
-        suggest_next         = hc,
-        objective_function   = obj_func,
-        initial_X            = X_init,
-        initial_pl           = pl_init,
-        initial_y            = y_init,
-        BO_iterations        = bo_iterations,
-        description          = 'BB-BO (GP+EI+HC)',
-        device               = DEVICE,
-        pretrain             = True               
+        gp=model,
+        gp_trainer=trainer,
+        acquisition_function=acq,
+        suggest_next=hc,
+        objective_function=obj_func,
+        initial_X=X_init,
+        initial_pl=pl_init,
+        initial_y=y_init,
+        BO_iterations=bo_iterations,
+        description="BB-BO (GP+EI+HC)",
+        device=DEVICE,
+        pretrain=True,
     )
-    best_x,best_y,evaluation_history = bo.run()
+    best_x, best_y, evaluation_history = bo.run()
 
     # The best-so-far results of bo (including initial points)
     flat = [v for row in evaluation_history for v in row]
     y_init_list = [i.item() for i in y_init]
     flat = y_init_list + flat
 
-    with open(f'./data/BO_results/BO_{l}_{g}_{dataset_index}_{seed}_{lambda_}.pkl','wb') as f:
-        results = {
-            'best_x':best_x,
-            'best_y':best_y,
-            'evaluation_history':flat
-        }
+    with open(
+        f"./data/BO_results/BO_{l}_{g}_{dataset_index}_{seed}_{lambda_}.pkl", "wb"
+    ) as f:
+        results = {"best_x": best_x, "best_y": best_y, "evaluation_history": flat}
         pickle.dump(results, f)

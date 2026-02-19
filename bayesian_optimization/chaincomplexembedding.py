@@ -51,20 +51,22 @@ class ChainComplexEmbedder(nn.Module):
         Activation used in the 2-layer MLP inside each message passing layer.
     """
 
-    def __init__(self,
-                 views_info: List[Dict[str, Any]],
-                 d_model: int = 128,
-                 num_layers: int = 4,
-                 *,
-                 view_aggr: str = "sum",
-                 readout_types: Optional[List[str]] = None,
-                 # per-layer options
-                 num_bases: Optional[int] = 4,
-                 norm: str = "sym",
-                 residual: bool = True,
-                 self_loop: bool = False,
-                 dropout: float = 0.1,
-                 act: Optional[nn.Module] = None):
+    def __init__(
+        self,
+        views_info: List[Dict[str, Any]],
+        d_model: int = 128,
+        num_layers: int = 4,
+        *,
+        view_aggr: str = "sum",
+        readout_types: Optional[List[str]] = None,
+        # per-layer options
+        num_bases: Optional[int] = 4,
+        norm: str = "sym",
+        residual: bool = True,
+        self_loop: bool = False,
+        dropout: float = 0.1,
+        act: Optional[nn.Module] = None,
+    ):
         super().__init__()
         assert view_aggr in ("sum", "mean")
         self.view_aggr = view_aggr
@@ -82,27 +84,35 @@ class ChainComplexEmbedder(nn.Module):
             name = v.get("name", "view")
             nts = list(v.get("partite_classes", []))
             rels = list(v.get("relations", []))
-            self.views_info.append({"name": name, "partite_classes": nts, "relations": rels})
+            self.views_info.append(
+                {"name": name, "partite_classes": nts, "relations": rels}
+            )
             self.view_names.append(name)
             self.view_node_types[name] = nts
             self.view_relations[name] = rels
             all_types.update(nts)
 
         self.all_node_types: List[str] = sorted(all_types)
-        self.readout_types: List[str] = list(readout_types) if readout_types is not None else self.all_node_types
+        self.readout_types: List[str] = (
+            list(readout_types) if readout_types is not None else self.all_node_types
+        )
 
         # ---- Learnable initial token per node type ----
-        self.type_tokens = nn.ParameterDict({
-            t: nn.Parameter(torch.empty(1, self.d_model)) for t in self.all_node_types
-        })
+        self.type_tokens = nn.ParameterDict(
+            {t: nn.Parameter(torch.empty(1, self.d_model)) for t in self.all_node_types}
+        )
         for p in self.type_tokens.values():
             nn.init.xavier_uniform_(p)
 
         # ---- Cross-view gates: one scalar per (layer, view) ----
-        self.view_gates = nn.ParameterList([
-            nn.ParameterDict({vn: nn.Parameter(torch.tensor(1.0)) for vn in self.view_names})
-            for _ in range(self.num_layers)
-        ])
+        self.view_gates = nn.ParameterList(
+            [
+                nn.ParameterDict(
+                    {vn: nn.Parameter(torch.tensor(1.0)) for vn in self.view_names}
+                )
+                for _ in range(self.num_layers)
+            ]
+        )
 
         # ---- Build message passing stacks (per layer, per view) ----
         Layer = ChainComplexMessagePassingLayer
@@ -111,12 +121,12 @@ class ChainComplexEmbedder(nn.Module):
             per_view = nn.ModuleDict()
             for vn in self.view_names:
                 per_view[vn] = Layer(
-                    node_types=self.all_node_types,          # pass full set; layer skips empty types by 'sizes'
+                    node_types=self.all_node_types,  # pass full set; layer skips empty types by 'sizes'
                     relations=self.view_relations[vn],
                     in_dim=self.d_model,
                     out_dim=self.d_model,
                     num_bases=num_bases,
-                    aggr="sum",            # sum over relations; cross-view aggregation happens here
+                    aggr="sum",  # sum over relations; cross-view aggregation happens here
                     norm=norm,
                     residual=residual,
                     self_loop=self_loop,
@@ -133,7 +143,9 @@ class ChainComplexEmbedder(nn.Module):
             nn.Linear(read_dim, hidden),
             nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden, self.d_model),   # change if you want a different final embedding size
+            nn.Linear(
+                hidden, self.d_model
+            ),  # change if you want a different final embedding size
         )
 
     # ===================== Packing utilities =====================
@@ -147,7 +159,9 @@ class ChainComplexEmbedder(nn.Module):
         elif t.startswith("b"):
             t = t[1:]
         if "_" not in t:
-            raise ValueError(f"Bad relation tag '{tag}'; expected 'A_B' (optionally prefixed by 'b'/'co').")
+            raise ValueError(
+                f"Bad relation tag '{tag}'; expected 'A_B' (optionally prefixed by 'b'/'co')."
+            )
         a, b = t.split("_", 1)
         return a.upper(), b.upper()
 
@@ -191,8 +205,13 @@ class ChainComplexEmbedder(nn.Module):
             # empty sparse tensor with the correct global shape
             empty_idx = torch.empty((2, 0), dtype=torch.long, device=device)
             empty_val = torch.empty((0,), dtype=dtype, device=device)
-            return torch.sparse_coo_tensor(empty_idx, empty_val, size=(total_dst, total_src),
-                                           device=device, dtype=dtype).coalesce()
+            return torch.sparse_coo_tensor(
+                empty_idx,
+                empty_val,
+                size=(total_dst, total_src),
+                device=device,
+                dtype=dtype,
+            ).coalesce()
 
         rows = torch.cat(idx_rows, dim=0)
         cols = torch.cat(idx_cols, dim=0)
@@ -271,9 +290,13 @@ class ChainComplexEmbedder(nn.Module):
                         src_sizes.append(batch_splits[src_t][b])
                         # zero degrees if the view is absent
                         if batch_splits[src_t][b] > 0:
-                            deg_src_list.append(torch.zeros(batch_splits[src_t][b], dtype=torch.float32))
+                            deg_src_list.append(
+                                torch.zeros(batch_splits[src_t][b], dtype=torch.float32)
+                            )
                         if batch_splits[dst_t][b] > 0:
-                            deg_dst_list.append(torch.zeros(batch_splits[dst_t][b], dtype=torch.float32))
+                            deg_dst_list.append(
+                                torch.zeros(batch_splits[dst_t][b], dtype=torch.float32)
+                            )
                         continue
 
                     A = vdict.get("adj", {}).get(r, None)
@@ -296,11 +319,21 @@ class ChainComplexEmbedder(nn.Module):
                         deg_dst_list.append(ddst.detach().cpu())
 
                 # block-diagonal adjacency
-                A_batch = self._concat_sparse_blockdiag(parts, dst_sizes, src_sizes, device=device, dtype=dtype)
+                A_batch = self._concat_sparse_blockdiag(
+                    parts, dst_sizes, src_sizes, device=device, dtype=dtype
+                )
 
                 # concatenated degrees
-                deg_src_cat = torch.cat(deg_src_list, dim=0) if deg_src_list else torch.zeros(0, dtype=torch.float32)
-                deg_dst_cat = torch.cat(deg_dst_list, dim=0) if deg_dst_list else torch.zeros(0, dtype=torch.float32)
+                deg_src_cat = (
+                    torch.cat(deg_src_list, dim=0)
+                    if deg_src_list
+                    else torch.zeros(0, dtype=torch.float32)
+                )
+                deg_dst_cat = (
+                    torch.cat(deg_dst_list, dim=0)
+                    if deg_dst_list
+                    else torch.zeros(0, dtype=torch.float32)
+                )
                 deg_src_cat = deg_src_cat.to(device)
                 deg_dst_cat = deg_dst_cat.to(device)
 
@@ -318,8 +351,9 @@ class ChainComplexEmbedder(nn.Module):
     # ===================== Pooling & init utilities =====================
 
     @staticmethod
-    def _gather_global_sizes(views: Dict[str, Dict[str, Any]],
-                             all_types: List[str]) -> Dict[str, int]:
+    def _gather_global_sizes(
+        views: Dict[str, Dict[str, Any]], all_types: List[str]
+    ) -> Dict[str, int]:
         """Collect total node counts per type across views (they should match; take max for robustness)."""
         totals: Dict[str, int] = {t: 0 for t in all_types}
         for v in views.values():
@@ -329,9 +363,9 @@ class ChainComplexEmbedder(nn.Module):
         return totals
 
     @staticmethod
-    def _build_initial_H(totals: Dict[str, int],
-                         type_tokens: nn.ParameterDict,
-                         device: torch.device) -> Dict[str, torch.Tensor]:
+    def _build_initial_H(
+        totals: Dict[str, int], type_tokens: nn.ParameterDict, device: torch.device
+    ) -> Dict[str, torch.Tensor]:
         """Create initial features by repeating per-type tokens according to total node counts."""
         H: Dict[str, torch.Tensor] = {}
         for t, n in totals.items():
@@ -342,7 +376,9 @@ class ChainComplexEmbedder(nn.Module):
         return H
 
     @staticmethod
-    def _pool_type_by_splits(H_t: torch.Tensor, splits: Optional[List[int]], mode: str = "mean") -> torch.Tensor:
+    def _pool_type_by_splits(
+        H_t: torch.Tensor, splits: Optional[List[int]], mode: str = "mean"
+    ) -> torch.Tensor:
         """
         Per-type, per-sample pooling for a batched graph.
 
@@ -374,9 +410,9 @@ class ChainComplexEmbedder(nn.Module):
 
     # ===================== Forward =====================
 
-    def forward(self,
-                views_or_list: Any,
-                batch_splits: Optional[Dict[str, List[int]]] = None) -> torch.Tensor:
+    def forward(
+        self, views_or_list: Any, batch_splits: Optional[Dict[str, List[int]]] = None
+    ) -> torch.Tensor:
         """
         Accept either:
           • a list of per-sample views (output of RelationEncoder.encode for each sample), or
@@ -389,14 +425,18 @@ class ChainComplexEmbedder(nn.Module):
 
         # If a list is provided, pack it first
         if isinstance(views_or_list, list):
-            packed_views, batch_splits = self._pack_batch(views_or_list, device=device, dtype=dtype)
+            packed_views, batch_splits = self._pack_batch(
+                views_or_list, device=device, dtype=dtype
+            )
             views = packed_views
         else:
             views = views_or_list
             # If no batch_splits are provided, assume a single-sample batch (B=1)
             if batch_splits is None:
                 totals_single = self._gather_global_sizes(views, self.all_node_types)
-                batch_splits = {t: [int(totals_single.get(t, 0))] for t in self.all_node_types}
+                batch_splits = {
+                    t: [int(totals_single.get(t, 0))] for t in self.all_node_types
+                }
 
         # (1) Collect total node counts per type and create initial features
         totals = self._gather_global_sizes(views, self.all_node_types)
@@ -435,25 +475,25 @@ class ChainComplexEmbedder(nn.Module):
         B = len(next(iter(batch_splits.values()))) if len(batch_splits) > 0 else 1
 
         for t in self.readout_types:
-            splits_t = batch_splits.get(t, [0] * B)  # fill zeros if a type never appears, to keep alignment
+            splits_t = batch_splits.get(
+                t, [0] * B
+            )  # fill zeros if a type never appears, to keep alignment
             pooled_t = self._pool_type_by_splits(H[t], splits_t, mode="mean")
             pooled_per_type.append(pooled_t)  # (B, d)
 
-        G = torch.cat(pooled_per_type, dim=-1) if len(pooled_per_type) > 1 else pooled_per_type[0]  # (B, d*)
+        G = (
+            torch.cat(pooled_per_type, dim=-1)
+            if len(pooled_per_type) > 1
+            else pooled_per_type[0]
+        )  # (B, d*)
         z = self.readout_mlp(G)  # (B, d_model)
         return z
-
-
-
-
-
-
-
 
 
 # ---------------------------
 # Message Passing Layer (fixed)
 # ---------------------------
+
 
 def _parse_relation_tag_global(tag: str) -> Tuple[str, str]:
     """Return (SRC, DST) from 'A_B' (accepts 'bA_B'/'coA_B' and strips prefix)."""
@@ -463,7 +503,9 @@ def _parse_relation_tag_global(tag: str) -> Tuple[str, str]:
     elif t.startswith("b"):
         t = t[1:]
     if "_" not in t:
-        raise ValueError(f"Bad relation tag '{tag}'; expected 'A_B' (optionally prefixed by 'b'/'co').")
+        raise ValueError(
+            f"Bad relation tag '{tag}'; expected 'A_B' (optionally prefixed by 'b'/'co')."
+        )
     a, b = t.split("_", 1)
     return a.upper(), b.upper()
 
@@ -477,19 +519,21 @@ class ChainComplexMessagePassingLayer(nn.Module):
       not view['sizes'], so that different views produce per-type tensors with **identical row counts**.
     """
 
-    def __init__(self,
-                 node_types: List[str],
-                 relations: List[str],
-                 in_dim: int,
-                 out_dim: int,
-                 *,
-                 num_bases: Optional[int] = 4,
-                 aggr: str = "sum",
-                 norm: str = "sym",
-                 residual: bool = True,
-                 self_loop: bool = False,
-                 dropout: float = 0.1,
-                 act: Optional[nn.Module] = None):
+    def __init__(
+        self,
+        node_types: List[str],
+        relations: List[str],
+        in_dim: int,
+        out_dim: int,
+        *,
+        num_bases: Optional[int] = 4,
+        aggr: str = "sum",
+        norm: str = "sym",
+        residual: bool = True,
+        self_loop: bool = False,
+        dropout: float = 0.1,
+        act: Optional[nn.Module] = None,
+    ):
         super().__init__()
         assert aggr in ("sum", "mean")
         assert norm in ("sym", "dst", "none")
@@ -506,41 +550,59 @@ class ChainComplexMessagePassingLayer(nn.Module):
         self.act = act if act is not None else nn.GELU()
 
         # Per-destination-type: LayerNorm (PreNorm), residual projection, update MLP, self-loop gate.
-        self.ln_in = nn.ModuleDict({t: nn.LayerNorm(self.in_dim) for t in self.node_types})
-        self.res_proj = nn.ModuleDict({t: nn.Linear(self.in_dim, self.out_dim, bias=False)
-                                       for t in self.node_types})
+        self.ln_in = nn.ModuleDict(
+            {t: nn.LayerNorm(self.in_dim) for t in self.node_types}
+        )
+        self.res_proj = nn.ModuleDict(
+            {
+                t: nn.Linear(self.in_dim, self.out_dim, bias=False)
+                for t in self.node_types
+            }
+        )
         hidden = max(self.out_dim * 2, 64)
-        self.update_mlp = nn.ModuleDict({
-            t: nn.Sequential(
-                nn.Linear(self.out_dim * 2, hidden, bias=True),
-                self.act,
-                nn.Dropout(self.dropout),
-                nn.Linear(hidden, self.out_dim, bias=True),
-            ) for t in self.node_types
-        })
+        self.update_mlp = nn.ModuleDict(
+            {
+                t: nn.Sequential(
+                    nn.Linear(self.out_dim * 2, hidden, bias=True),
+                    self.act,
+                    nn.Dropout(self.dropout),
+                    nn.Linear(hidden, self.out_dim, bias=True),
+                )
+                for t in self.node_types
+            }
+        )
         if self.self_loop:
-            self.self_gate = nn.ParameterDict({t: nn.Parameter(torch.tensor(1.0)) for t in self.node_types})
+            self.self_gate = nn.ParameterDict(
+                {t: nn.Parameter(torch.tensor(1.0)) for t in self.node_types}
+            )
 
         # Relation weights: basis or per-relation
         if self.num_bases is None or self.num_bases >= len(self.relations):
             self.weight_mode = "per_relation"
-            self.rel_W = nn.ParameterDict({
-                r: nn.Parameter(torch.empty(self.in_dim, self.out_dim)) for r in self.relations
-            })
+            self.rel_W = nn.ParameterDict(
+                {
+                    r: nn.Parameter(torch.empty(self.in_dim, self.out_dim))
+                    for r in self.relations
+                }
+            )
             for p in self.rel_W.values():
                 nn.init.xavier_uniform_(p)
         else:
             self.weight_mode = "basis"
             B = self.num_bases
-            self.bases = nn.ParameterList([nn.Parameter(torch.empty(self.in_dim, self.out_dim)) for _ in range(B)])
+            self.bases = nn.ParameterList(
+                [nn.Parameter(torch.empty(self.in_dim, self.out_dim)) for _ in range(B)]
+            )
             for V in self.bases:
                 nn.init.xavier_uniform_(V)
-            self.rel_coeff = nn.ParameterDict({
-                r: nn.Parameter(torch.randn(B) / (B ** 0.5)) for r in self.relations
-            })
+            self.rel_coeff = nn.ParameterDict(
+                {r: nn.Parameter(torch.randn(B) / (B**0.5)) for r in self.relations}
+            )
 
         # Relation gates (scalar)
-        self.rel_gate = nn.ParameterDict({r: nn.Parameter(torch.tensor(1.0)) for r in self.relations})
+        self.rel_gate = nn.ParameterDict(
+            {r: nn.Parameter(torch.tensor(1.0)) for r in self.relations}
+        )
         self.dropout_out = nn.Dropout(self.dropout)
 
     # ---- helpers ----
@@ -549,7 +611,9 @@ class ChainComplexMessagePassingLayer(nn.Module):
             return self.rel_W[r]
         # basis
         coeff = self.rel_coeff[r]  # (B,)
-        W = torch.zeros((self.in_dim, self.out_dim), device=coeff.device, dtype=self.bases[0].dtype)
+        W = torch.zeros(
+            (self.in_dim, self.out_dim), device=coeff.device, dtype=self.bases[0].dtype
+        )
         for a, V in zip(coeff, self.bases):
             W = W + a * V
         return W
@@ -568,11 +632,13 @@ class ChainComplexMessagePassingLayer(nn.Module):
         out[mask] = x[mask].reciprocal()
         return out
 
-    def _spmm_norm(self,
-                   A: torch.Tensor,                # sparse COO (|dst| x |src|)
-                   X_src: torch.Tensor,            # (|src| x out_dim)
-                   deg_src: torch.Tensor,          # (|src|,)
-                   deg_dst: torch.Tensor) -> torch.Tensor:   # (|dst|,)
+    def _spmm_norm(
+        self,
+        A: torch.Tensor,  # sparse COO (|dst| x |src|)
+        X_src: torch.Tensor,  # (|src| x out_dim)
+        deg_src: torch.Tensor,  # (|src|,)
+        deg_dst: torch.Tensor,
+    ) -> torch.Tensor:  # (|dst|,)
         """Apply normalization + SpMM for one relation."""
         if self.norm == "none":
             msg = torch.sparse.mm(A, X_src)
@@ -582,16 +648,16 @@ class ChainComplexMessagePassingLayer(nn.Module):
             dinv = self._safe_inv(deg_dst).unsqueeze(-1)  # (|dst|,1)
             return msg * dinv
         else:  # 'sym'
-            dsrc = self._safe_inv_sqrt(deg_src).unsqueeze(-1)   # (|src|,1)
+            dsrc = self._safe_inv_sqrt(deg_src).unsqueeze(-1)  # (|src|,1)
             Xn = X_src * dsrc
             msg = torch.sparse.mm(A, Xn)
-            ddst = self._safe_inv_sqrt(deg_dst).unsqueeze(-1)   # (|dst|,1)
+            ddst = self._safe_inv_sqrt(deg_dst).unsqueeze(-1)  # (|dst|,1)
             return msg * ddst
 
     # ---- forward ----
-    def forward(self,
-                H: Dict[str, torch.Tensor],
-                view: Dict[str, dict]) -> Dict[str, torch.Tensor]:
+    def forward(
+        self, H: Dict[str, torch.Tensor], view: Dict[str, dict]
+    ) -> Dict[str, torch.Tensor]:
         """
         H: {type: (N_type_global, in_dim)}
         view: {'adj': {relation_tag: sparse_coo}, 'deg': {relation_tag: (deg_src, deg_dst)}, ...}
@@ -602,11 +668,14 @@ class ChainComplexMessagePassingLayer(nn.Module):
         device = next(self.parameters()).device
 
         # GLOBAL counts from H, not from view['sizes']
-        N: Dict[str, int] = {t: (H[t].shape[0] if t in H else 0) for t in self.node_types}
+        N: Dict[str, int] = {
+            t: (H[t].shape[0] if t in H else 0) for t in self.node_types
+        }
 
         # Aggregation buffers per destination type (GLOBAL shapes)
         agg_msgs: Dict[str, torch.Tensor] = {
-            t: torch.zeros((N.get(t, 0), self.out_dim), device=device) for t in self.node_types
+            t: torch.zeros((N.get(t, 0), self.out_dim), device=device)
+            for t in self.node_types
         }
         rel_counts: Dict[str, int] = {t: 0 for t in self.node_types}
 
@@ -625,8 +694,8 @@ class ChainComplexMessagePassingLayer(nn.Module):
         for r in self.relations:
             if "adj" not in view or r not in view["adj"]:
                 continue  # relation absent
-            A = view["adj"][r]                    # (|dst_global| x |src_global|) sparse COO
-            deg_src, deg_dst = view["deg"][r]     # 1D tensors
+            A = view["adj"][r]  # (|dst_global| x |src_global|) sparse COO
+            deg_src, deg_dst = view["deg"][r]  # 1D tensors
             src, dst = _parse_relation_tag_global(r)
 
             n_src = N.get(src, 0)
@@ -635,15 +704,18 @@ class ChainComplexMessagePassingLayer(nn.Module):
                 continue  # no-op
 
             # Sanity check: adjacency must match global shapes
-            assert A.size(0) == n_dst and A.size(1) == n_src, \
+            assert A.size(0) == n_dst and A.size(1) == n_src, (
                 f"Adjacency shape mismatch for relation {r}: got {tuple(A.size())}, expected ({n_dst},{n_src})"
+            )
 
             # 1) Linear map on src
-            W_r = self._get_W(r)                  # (in_dim x out_dim)
-            X_src = H[src] @ W_r                  # (|src| x out_dim)
+            W_r = self._get_W(r)  # (in_dim x out_dim)
+            X_src = H[src] @ W_r  # (|src| x out_dim)
 
             # 2) Normalization + SpMM
-            msg = self._spmm_norm(A, X_src, deg_src.to(device), deg_dst.to(device))  # (|dst| x out_dim)
+            msg = self._spmm_norm(
+                A, X_src, deg_src.to(device), deg_dst.to(device)
+            )  # (|dst| x out_dim)
 
             # 3) Relation gate
             gamma = self.rel_gate[r]
@@ -675,7 +747,7 @@ class ChainComplexMessagePassingLayer(nn.Module):
                 out[t] = torch.zeros((0, self.out_dim), device=device)
                 continue
             upd_in = torch.cat([proj_dst[t], agg_msgs[t]], dim=-1)  # (|t|, 2*out_dim)
-            upd = self.update_mlp[t](upd_in)                         # (|t|, out_dim)
+            upd = self.update_mlp[t](upd_in)  # (|t|, out_dim)
             upd = self.dropout_out(upd)
             out[t] = proj_dst[t] + upd if self.residual else upd
         return out
@@ -684,6 +756,7 @@ class ChainComplexMessagePassingLayer(nn.Module):
 # ---------------------------
 # Embedder (fixed)
 # ---------------------------
+
 
 def _cum_offsets(sizes: List[int]) -> List[int]:
     """Compute cumulative offsets for a list of segment sizes."""
@@ -705,20 +778,22 @@ class ChainComplexEmbedder(nn.Module):
       • per-type global counts are computed from **batch_splits** (sum) to initialize features.
     """
 
-    def __init__(self,
-                 views_info: List[Dict[str, Any]],
-                 d_model: int = 128,
-                 num_layers: int = 4,
-                 *,
-                 view_aggr: str = "sum",
-                 readout_types: Optional[List[str]] = None,
-                 # per-layer options
-                 num_bases: Optional[int] = 4,
-                 norm: str = "sym",
-                 residual: bool = True,
-                 self_loop: bool = False,
-                 dropout: float = 0.1,
-                 act: Optional[nn.Module] = None):
+    def __init__(
+        self,
+        views_info: List[Dict[str, Any]],
+        d_model: int = 128,
+        num_layers: int = 4,
+        *,
+        view_aggr: str = "sum",
+        readout_types: Optional[List[str]] = None,
+        # per-layer options
+        num_bases: Optional[int] = 4,
+        norm: str = "sym",
+        residual: bool = True,
+        self_loop: bool = False,
+        dropout: float = 0.1,
+        act: Optional[nn.Module] = None,
+    ):
         super().__init__()
         assert view_aggr in ("sum", "mean")
         self.view_aggr = view_aggr
@@ -736,27 +811,35 @@ class ChainComplexEmbedder(nn.Module):
             name = v.get("name", "view")
             nts = list(v.get("partite_classes", []))
             rels = list(v.get("relations", []))
-            self.views_info.append({"name": name, "partite_classes": nts, "relations": rels})
+            self.views_info.append(
+                {"name": name, "partite_classes": nts, "relations": rels}
+            )
             self.view_names.append(name)
             self.view_node_types[name] = nts
             self.view_relations[name] = rels
             all_types.update(nts)
 
         self.all_node_types: List[str] = sorted(all_types)
-        self.readout_types: List[str] = list(readout_types) if readout_types is not None else self.all_node_types
+        self.readout_types: List[str] = (
+            list(readout_types) if readout_types is not None else self.all_node_types
+        )
 
         # Type tokens
-        self.type_tokens = nn.ParameterDict({
-            t: nn.Parameter(torch.empty(1, self.d_model)) for t in self.all_node_types
-        })
+        self.type_tokens = nn.ParameterDict(
+            {t: nn.Parameter(torch.empty(1, self.d_model)) for t in self.all_node_types}
+        )
         for p in self.type_tokens.values():
             nn.init.xavier_uniform_(p)
 
         # View gates: one scalar per (layer, view)
-        self.view_gates = nn.ParameterList([
-            nn.ParameterDict({vn: nn.Parameter(torch.tensor(1.0)) for vn in self.view_names})
-            for _ in range(self.num_layers)
-        ])
+        self.view_gates = nn.ParameterList(
+            [
+                nn.ParameterDict(
+                    {vn: nn.Parameter(torch.tensor(1.0)) for vn in self.view_names}
+                )
+                for _ in range(self.num_layers)
+            ]
+        )
 
         # Per-layer, per-view message passing modules
         Layer = ChainComplexMessagePassingLayer
@@ -801,7 +884,9 @@ class ChainComplexEmbedder(nn.Module):
         elif t.startswith("b"):
             t = t[1:]
         if "_" not in t:
-            raise ValueError(f"Bad relation tag '{tag}'; expected 'A_B' (optionally prefixed by 'b'/'co').")
+            raise ValueError(
+                f"Bad relation tag '{tag}'; expected 'A_B' (optionally prefixed by 'b'/'co')."
+            )
         a, b = t.split("_", 1)
         return a.upper(), b.upper()
 
@@ -844,8 +929,13 @@ class ChainComplexEmbedder(nn.Module):
         if len(vals) == 0:
             empty_idx = torch.empty((2, 0), dtype=torch.long, device=device)
             empty_val = torch.empty((0,), dtype=dtype, device=device)
-            return torch.sparse_coo_tensor(empty_idx, empty_val, size=(total_dst, total_src),
-                                           device=device, dtype=dtype).coalesce()
+            return torch.sparse_coo_tensor(
+                empty_idx,
+                empty_val,
+                size=(total_dst, total_src),
+                device=device,
+                dtype=dtype,
+            ).coalesce()
 
         rows = torch.cat(idx_rows, dim=0)
         cols = torch.cat(idx_cols, dim=0)
@@ -917,7 +1007,9 @@ class ChainComplexEmbedder(nn.Module):
 
                 for b in range(B):
                     vdict = sample_views_list[b].get(vn, None)
-                    blk_src = batch_splits[src_t][b]  # ALWAYS use global per-sample block size
+                    blk_src = batch_splits[src_t][
+                        b
+                    ]  # ALWAYS use global per-sample block size
                     blk_dst = batch_splits[dst_t][b]
 
                     # adjacency block (can be None)
@@ -935,11 +1027,27 @@ class ChainComplexEmbedder(nn.Module):
                         dsrc = dsrc.detach().cpu()
                         ddst = ddst.detach().cpu()
                         if dsrc.numel() < blk_src:
-                            dsrc = torch.cat([dsrc, torch.zeros(blk_src - dsrc.numel(), dtype=torch.float32)], dim=0)
+                            dsrc = torch.cat(
+                                [
+                                    dsrc,
+                                    torch.zeros(
+                                        blk_src - dsrc.numel(), dtype=torch.float32
+                                    ),
+                                ],
+                                dim=0,
+                            )
                         elif dsrc.numel() > blk_src:
                             dsrc = dsrc[:blk_src]
                         if ddst.numel() < blk_dst:
-                            ddst = torch.cat([ddst, torch.zeros(blk_dst - ddst.numel(), dtype=torch.float32)], dim=0)
+                            ddst = torch.cat(
+                                [
+                                    ddst,
+                                    torch.zeros(
+                                        blk_dst - ddst.numel(), dtype=torch.float32
+                                    ),
+                                ],
+                                dim=0,
+                            )
                         elif ddst.numel() > blk_dst:
                             ddst = ddst[:blk_dst]
 
@@ -947,7 +1055,9 @@ class ChainComplexEmbedder(nn.Module):
                     deg_dst_list.append(ddst)
 
                 # block-diagonal adjacency (GLOBAL shapes)
-                A_batch = self._concat_sparse_blockdiag(parts, dst_sizes, src_sizes, device=device, dtype=dtype)
+                A_batch = self._concat_sparse_blockdiag(
+                    parts, dst_sizes, src_sizes, device=device, dtype=dtype
+                )
 
                 # concatenated degrees
                 deg_src_cat = torch.cat(deg_src_list, dim=0).to(device)
@@ -957,7 +1067,7 @@ class ChainComplexEmbedder(nn.Module):
                 deg_packed[r] = (deg_src_cat, deg_dst_cat)
 
             packed_views[vn] = {
-                "sizes": totals_v,   # kept for reference; layer does not rely on it for allocation
+                "sizes": totals_v,  # kept for reference; layer does not rely on it for allocation
                 "adj": adj_packed,
                 "deg": deg_packed,
             }
@@ -965,9 +1075,11 @@ class ChainComplexEmbedder(nn.Module):
         return packed_views, batch_splits
 
     @staticmethod
-    def _build_initial_H_from_splits(batch_splits: Dict[str, List[int]],
-                                     type_tokens: nn.ParameterDict,
-                                     device: torch.device) -> Dict[str, torch.Tensor]:
+    def _build_initial_H_from_splits(
+        batch_splits: Dict[str, List[int]],
+        type_tokens: nn.ParameterDict,
+        device: torch.device,
+    ) -> Dict[str, torch.Tensor]:
         """Create initial features by repeating per-type tokens; counts from sum of batch_splits."""
         H: Dict[str, torch.Tensor] = {}
         for t, splits in batch_splits.items():
@@ -979,12 +1091,18 @@ class ChainComplexEmbedder(nn.Module):
         return H
 
     @staticmethod
-    def _pool_type_by_splits(H_t: torch.Tensor, splits: Optional[List[int]], mode: str = "mean") -> torch.Tensor:
+    def _pool_type_by_splits(
+        H_t: torch.Tensor, splits: Optional[List[int]], mode: str = "mean"
+    ) -> torch.Tensor:
         """Per-type, per-sample pooling for a batched graph."""
         if splits is None:
             if H_t.numel() == 0:
                 return H_t.new_zeros((1, H_t.shape[1]))
-            return H_t.mean(dim=0, keepdim=True) if mode == "mean" else H_t.sum(dim=0, keepdim=True)
+            return (
+                H_t.mean(dim=0, keepdim=True)
+                if mode == "mean"
+                else H_t.sum(dim=0, keepdim=True)
+            )
 
         B = len(splits)
         offs = _cum_offsets(splits)
@@ -999,9 +1117,9 @@ class ChainComplexEmbedder(nn.Module):
 
     # ---------- Forward ----------
 
-    def forward(self,
-                views_or_list: Any,
-                batch_splits: Optional[Dict[str, List[int]]] = None) -> torch.Tensor:
+    def forward(
+        self, views_or_list: Any, batch_splits: Optional[Dict[str, List[int]]] = None
+    ) -> torch.Tensor:
         """
         Accept either:
           • a list of per-sample views (output of RelationEncoder.encode for each sample), or
@@ -1014,10 +1132,14 @@ class ChainComplexEmbedder(nn.Module):
 
         # If a list is provided, pack it first
         if isinstance(views_or_list, list):
-            packed_views, batch_splits = self._pack_batch(views_or_list, device=device, dtype=dtype)
+            packed_views, batch_splits = self._pack_batch(
+                views_or_list, device=device, dtype=dtype
+            )
             views = packed_views
             # Build initial features using global counts from batch_splits
-            H = self._build_initial_H_from_splits(batch_splits, self.type_tokens, device=device)
+            H = self._build_initial_H_from_splits(
+                batch_splits, self.type_tokens, device=device
+            )
         else:
             views = views_or_list
             # If no batch_splits are provided, assume B=1 and infer counts from views (best effort)
@@ -1026,9 +1148,15 @@ class ChainComplexEmbedder(nn.Module):
                 for t in self.all_node_types:
                     totals_single[t] = 0
                     for v in views.values():
-                        totals_single[t] = max(totals_single[t], int(v.get("sizes", {}).get(t, 0)))
-                batch_splits = {t: [totals_single.get(t, 0)] for t in self.all_node_types}
-            H = self._build_initial_H_from_splits(batch_splits, self.type_tokens, device=device)
+                        totals_single[t] = max(
+                            totals_single[t], int(v.get("sizes", {}).get(t, 0))
+                        )
+                batch_splits = {
+                    t: [totals_single.get(t, 0)] for t in self.all_node_types
+                }
+            H = self._build_initial_H_from_splits(
+                batch_splits, self.type_tokens, device=device
+            )
 
         # L stacked layers; per layer: run every view, then aggregate across views
         for li, per_view in enumerate(self.layers):
@@ -1062,10 +1190,16 @@ class ChainComplexEmbedder(nn.Module):
         B = len(next(iter(batch_splits.values()))) if len(batch_splits) > 0 else 1
 
         for t in self.readout_types:
-            splits_t = batch_splits.get(t, [0] * B)  # fill zeros if a type never appears
+            splits_t = batch_splits.get(
+                t, [0] * B
+            )  # fill zeros if a type never appears
             pooled_t = self._pool_type_by_splits(H[t], splits_t, mode="mean")
             pooled_per_type.append(pooled_t)  # (B, d)
 
-        G = torch.cat(pooled_per_type, dim=-1) if len(pooled_per_type) > 1 else pooled_per_type[0]  # (B, d*)
+        G = (
+            torch.cat(pooled_per_type, dim=-1)
+            if len(pooled_per_type) > 1
+            else pooled_per_type[0]
+        )  # (B, d*)
         z = self.readout_mlp(G)  # (B, d_model)
         return z

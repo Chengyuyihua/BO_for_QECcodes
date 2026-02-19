@@ -167,7 +167,6 @@ class css_decode_sim:
 
         # randomly generate the error
         self.error_x, self.error_z = self._generate_error()
-        
 
         if self.channel_update is None:
             # decode z
@@ -257,7 +256,7 @@ class css_decode_sim:
         # calculate the residual error
         residual_x = (self.error_x + self.bpd_x.osdw_decoding) % 2
         residual_z = (self.error_z + self.bpd_z.osdw_decoding) % 2
-        print(f'new syndrome:{self.hz@residual_x %2}')
+        print(f"new syndrome:{self.hz @ residual_x % 2}")
 
         # check for logical X-error
         if (self.lz @ residual_x % 2).any():
@@ -524,7 +523,7 @@ class css_decode_sim:
             self._single_run()
 
             pbar.set_description(
-                f"d_max: {self.min_logical_weight}; OSDW_WER: {self.osdw_word_error_rate*100:.3g}±{self.osdw_word_error_rate_eb*100:.2g}%; OSDW: {self.osdw_logical_error_rate*100:.3g}±{self.osdw_logical_error_rate_eb*100:.2g}%; OSD0: {self.osd0_logical_error_rate*100:.3g}±{self.osd0_logical_error_rate_eb*100:.2g}%;"
+                f"d_max: {self.min_logical_weight}; OSDW_WER: {self.osdw_word_error_rate * 100:.3g}±{self.osdw_word_error_rate_eb * 100:.2g}%; OSDW: {self.osdw_logical_error_rate * 100:.3g}±{self.osdw_logical_error_rate_eb * 100:.2g}%; OSD0: {self.osd0_logical_error_rate * 100:.3g}±{self.osd0_logical_error_rate_eb * 100:.2g}%;"
             )
 
             current_time = time.time()
