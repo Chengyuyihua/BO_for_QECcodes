@@ -929,10 +929,13 @@ def set_all_seeds(seed: int = 42):
 
 
 class Get_new_points_function:
-    def __init__(self, method="qc-ldpc-hgp", code_constructor=None, encode="None"):
+    def __init__(
+        self, method="qc-ldpc-hgp", code_constructor=None, encode="None", density=None
+    ):
         self.method = method
         self.code_constructor = code_constructor
         self.encode = encode
+        self.density = density
         self.init = False
 
     def get_new_points_function(self, number):
@@ -940,6 +943,8 @@ class Get_new_points_function:
             new_points = self.get_new_points_HGP(number)
         elif self.method == "bb":
             new_points = self.get_new_bb_vector(number)
+        elif self.method == "gbb":
+            new_points = self.get_new_gbb_vector(number)
         return new_points
 
     def get_new_points_HGP(self, number):
@@ -969,6 +974,35 @@ class Get_new_points_function:
         while number > 0:
             new_point = np.random.randint(0, 2, size=(l + g - 1) * 2)
             c = self.code_constructor.construct(new_point)
+            if c.k == 0:
+                continue
+            else:
+                results.append(new_point)
+                number -= 1
+        return np.array(results)
+
+    def get_new_gbb_vector(self, number):
+        results = []
+        l = self.code_constructor.para_dict["l"]
+        g = self.code_constructor.para_dict["g"]
+
+        while number > 0:
+            new_point = np.zeros(shape=(2 * l * g))
+            new_point[0] = 1  # fix x^0 * y^0 = 1 to ignore identical shifted codes
+
+            indexes = np.random.shuffle([i for i in range(l * g)])
+            for i in range(
+                self.density - 1
+            ):  # density: number of 1s in both A and B, fixed to ensure sparsity
+                new_point[indexes[i]] = 1
+
+            indexes = np.random.shuffle(indexes)
+            for i in range(self.density):
+                new_point[indexes[i] + l * g] = 1
+
+            c = self.code_constructor.construct(
+                new_point
+            )  # TODO define code_constructor.construct for GBB
             if c.k == 0:
                 continue
             else:

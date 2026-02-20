@@ -94,8 +94,14 @@ class CodeConstructor:
         #     return self.check_bivariate_bycicle_parameters_validity()
         elif self.method == "rotated-surface":
             return True
-        elif self.method in ["qc-gb", "bivariate-bycicle", "bb", "symmetric-qc-gb"]:
-            if self.method in ["bb", "bivariate-bycicle"]:
+        elif self.method in [
+            "qc-gb",
+            "bivariate-bycicle",
+            "bb",
+            "symmetric-qc-gb",
+            "gbb",
+        ]:
+            if self.method in ["bb", "bivariate-bycicle", "gbb"]:
                 try:
                     self.n = self.para_dict["l"] * self.para_dict["g"]
                     self.nx = self.n
@@ -131,6 +137,8 @@ class CodeConstructor:
             return self.quasi_cyclic_generalized_bicycle_code(parameters)
         elif self.method == "bivariate-bycicle" or self.method == "bb":
             return self.arbitrary_bivariate_bicycle_code(parameters)
+        elif self.method == "gbb":
+            return self.generalised_bivariate_bicycle_code(parameters)
         elif self.method == "symmetric-qc-gb":
             return self.symmetric_quasi_cyclic_generalized_bicycle_code(parameters)
         else:
@@ -597,6 +605,28 @@ class CodeConstructor:
                     A[i][i][j + 1] = (A[i][i][j + 1] + 1) % 2
                 if b[j + l] == 1:
                     B[i][i][j + 1] = (B[i][i][j + 1] + 1) % 2
+
+        return self.quasi_cyclic_generalized_bicycle_code({"A": A, "B": B})
+
+    def generalised_bivariate_bicycle_code(self, parameters):
+        l = self.para_dict["l"]
+        g = self.para_dict["g"]
+
+        a = parameters[: (l * g)]
+        b = parameters[(l * g) :]
+
+        A = np.zeros((l, l, g), dtype=int)
+        B = np.zeros((l, l, g), dtype=int)
+
+        for i in range(l):
+            for j in range(l):
+                for k in range(g):
+                    idx = (j * g) + k
+                    if a[idx] == 1:
+                        A[i][(i + j) % l][k] = 1
+                    if b[idx] == 1:
+                        B[i][(i + j) % l][k] = 1
+
         return self.quasi_cyclic_generalized_bicycle_code({"A": A, "B": B})
 
     def symmetric_quasi_cyclic_generalized_bicycle_code(self, A):
