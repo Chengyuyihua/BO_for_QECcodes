@@ -1068,14 +1068,20 @@ if __name__ == "__main__":
     import pickle
     import sys
 
-    if len(sys.argv) == 3:
-        seed = int(sys.argv[1])
-        dataset_index = int(sys.argv[2])
+    code_class = "bb"
+
+    args = sys.argv[1:]
+    if args[0].isalpha():
+        code_class = args.pop(0)
+
+    if len(args) == 3:
+        seed = int(args[1])
+        dataset_index = int(args[2])
         lambda_ = 1
-    elif len(sys.argv) > 3:
-        seed = int(sys.argv[1])
-        dataset_index = int(sys.argv[2])
-        lambda_ = float(sys.argv[3])
+    elif len(args) > 3:
+        seed = int(args[1])
+        dataset_index = int(args[2])
+        lambda_ = float(args[3])
     else:
         seed = 42
         dataset_index = 0
@@ -1089,7 +1095,6 @@ if __name__ == "__main__":
     )
 
     para_dict = {"l": l, "g": g}
-    code_class = "bb"
 
     code_constructor = CodeConstructor(method=code_class, para_dict=para_dict)
     # define objective function
@@ -1145,7 +1150,7 @@ if __name__ == "__main__":
             pickle.dump({"X": X_init, "y": y_init, "pl": pl_init}, f)
             print(f"Saved initial points to {init_data_file}")
 
-    print(f"Loading initial codes from {init_data_file}...")
+    print(f"Loading initial codes from {init_data_file}")
     with open(init_data_file, "rb") as f:
         data = pickle.load(f)
         X_init = data["X"]
