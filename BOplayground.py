@@ -1,5 +1,3 @@
-# Todo:
-# add more BO experiments;
 device = "cuda"
 DEVICE = "cuda"
 import os
@@ -1045,13 +1043,13 @@ class Get_new_points_function:
             new_point = np.zeros(shape=(2 * l * g))
             new_point[0] = 1  # fix x^0 * y^0 = 1 to ignore identical shifted codes
 
-            indexes = np.random.shuffle([i for i in range(l * g)])
+            indexes = np.random.permutation(l * g)
             for i in range(
                 self.density - 1
             ):  # density: number of 1s in both A and B, fixed to ensure sparsity
                 new_point[indexes[i]] = 1
 
-            indexes = np.random.shuffle(indexes)
+            np.random.shuffle(indexes)
             for i in range(self.density):
                 new_point[indexes[i] + l * g] = 1
 
@@ -1068,7 +1066,9 @@ if __name__ == "__main__":
     import pickle
     import sys
 
+    # default values
     code_class = "bb"
+    density = 3
 
     args = sys.argv[1:]
     if args[0].isalpha():
@@ -1078,10 +1078,15 @@ if __name__ == "__main__":
         seed = int(args[1])
         dataset_index = int(args[2])
         lambda_ = 1
-    elif len(args) > 3:
+    elif len(args) == 4:
         seed = int(args[1])
         dataset_index = int(args[2])
         lambda_ = float(args[3])
+    elif len(args) == 5:
+        seed = int(args[1])
+        dataset_index = int(args[2])
+        lambda_ = float(args[3])
+        density = int(args[4])
     else:
         seed = 42
         dataset_index = 0
@@ -1106,7 +1111,7 @@ if __name__ == "__main__":
     pl_to_obj = Obj_Func.pl_to_obj_with_std
     # method of sampling new points
     gnp = Get_new_points_function(
-        method=code_class, code_constructor=code_constructor
+        method=code_class, code_constructor=code_constructor, density=density
     ).get_new_points_function
     # initial points:
     # init_num = 20
@@ -1118,7 +1123,7 @@ if __name__ == "__main__":
     #     y_init.append(y)
     #     pl_init.append(pl)
     if code_class == "gbb":
-        init_data_file = "./data/BO_initial_points/GBB_BO_initial_points_{dataset_index}_{lambda_}_{l}_{g}.pkl"
+        init_data_file = f"./data/BO_initial_points/GBB_BO_initial_points_{dataset_index}_{lambda_}_{density}_{l}_{g}.pkl"
     else:  # bb
         if l == 6 and g == 3:
             if lambda_ == 1:
@@ -1135,7 +1140,7 @@ if __name__ == "__main__":
 
     if not os.path.exists(init_data_file):
         # no starting codes exist, so generate some:
-        init_num = 20  # TODO check pkls see how big they are
+        init_num = 20
         print(f"Generating and evaluating {init_num} initial {code_class} codes...")
         X_init = gnp(init_num)
         y_init = []
@@ -1144,7 +1149,7 @@ if __name__ == "__main__":
             y, pl = obj_func(x)
             y_init.append(y)
             pl_init.append(pl)
-            print("Evaluated initial code {i}/{init_num} (score={y:.4f})")
+            print(f"Evaluated initial code {i}/{init_num} (score={y:.4f})")
 
         with open(init_data_file, "wb") as f:
             pickle.dump({"X": X_init, "y": y_init, "pl": pl_init}, f)
