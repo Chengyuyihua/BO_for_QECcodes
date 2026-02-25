@@ -2,6 +2,7 @@
 # add more BO experiments;
 device = "cuda"
 DEVICE = "cuda"
+import os
 import random
 import numpy as np
 import torch
@@ -25,7 +26,13 @@ from dataclasses import dataclass, asdict
 
 class HillClimbing:
     def __init__(
-        self, next_points_num, gnp, acquisition, device="cuda", validator=None
+        self,
+        next_points_num,
+        gnp,
+        acquisition,
+        device="cuda",
+        validator=None,
+        method="bb",
     ):
 
         self.next_points_num = int(next_points_num)
@@ -35,9 +42,15 @@ class HillClimbing:
         self.validator = (
             validator  # 例如 lambda z: code_constructor.construct(z).k != 0
         )
+        match method:
+            case "gbb":
+                self.mutate = self.swap_neighbours
+            case "bb":
+                self.mutate = self.flip_neighbours
+            case _:
+                raise ValueError("The method is not supported.")
 
-    def hill_climbing_neighbors(self, x: torch.Tensor) -> torch.Tensor:
-
+    def flip_neighbours(self, x: torch.Tensor) -> torch.Tensor:
         x = x.detach()
         d = x.numel()
         neigh_list = []
@@ -47,6 +60,50 @@ class HillClimbing:
             n[i] = 1.0 - n[i]
             neigh_list.append(n)
         return torch.stack(neigh_list, dim=0)  # [d, d]
+
+    # allows swapping between A and B
+    def swap_neighbours(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.detach()
+
+        ones_indices = torch.where(x[1:] == 1.0)[0] + 1  # dont swap anchor 1 at [0,0]
+        zeros_indices = torch.where(x == 0)[0]
+
+        neigh_list = []
+        for i in ones_indices:
+            for j in zeros_indices:
+                n = x.clone()
+                n[i] == 0.0
+                n[j] == 1.0
+                neigh_list.append(n)
+        return torch.stack(neigh_list, dim=0)
+
+    # only swaps within A and B so that both matrices always have the same number of 1s
+    def swap_neighbours_within_matrices(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.detach()
+        half_length = x.size()[0] // 2
+
+        ones_indices_A = torch.where(x[1:half_length] == 1.0)[0] + 1
+        zeros_indices_A = torch.where(x[:half_length] == 0)[0]
+
+        neigh_list = []
+        for i in ones_indices_A:
+            for j in zeros_indices_A:
+                n = x.clone()
+                n[i] == 0.0
+                n[j] == 1.0
+                neigh_list.append(n)
+
+        ones_indices_B = torch.where(x[half_length:] == 1.0)[0]
+        zeros_indices_B = torch.where(x[half_length:] == 0)[0]
+
+        for i in ones_indices_B:
+            for j in zeros_indices_B:
+                n = x.clone()
+                n[i] == 0.0
+                n[j] == 1.0
+                neigh_list.append(n)
+
+        return torch.stack(neigh_list, dim=0)
 
     @torch.no_grad()
     def __call__(self, gp) -> torch.Tensor:
@@ -61,7 +118,7 @@ class HillClimbing:
             best_val = self.acquisition(best_neighbor.unsqueeze(0), gp).reshape(-1)[0]
 
             while True:
-                nbrs = self.hill_climbing_neighbors(best_neighbor).to(self.device)
+                nbrs = self.mutate(best_neighbor).to(self.device)
                 acq_vals = self.acquisition(nbrs, gp).reshape(-1)  # [d]
                 top_val, top_idx = torch.topk(acq_vals, k=1)
                 top_val = top_val[0]
@@ -84,9 +141,7 @@ class HillClimbing:
                     tries = 0
                     while not self.validator(cand_np[i]):
                         tries += 1
-                        cand_np[i] = np.random.randint(
-                            0, 2, cand_np[i].shape, dtype=np.int64
-                        )
+                        cand_np[i] = self.gnp(1)
                         if tries > 1000:
                             break
             cand = torch.tensor(cand_np, dtype=torch.float32, device=self.device)
@@ -1000,9 +1055,7 @@ class Get_new_points_function:
             for i in range(self.density):
                 new_point[indexes[i] + l * g] = 1
 
-            c = self.code_constructor.construct(
-                new_point
-            )  # TODO define code_constructor.construct for GBB
+            c = self.code_constructor.construct(new_point)
             if c.k == 0:
                 continue
             else:
@@ -1059,22 +1112,40 @@ if __name__ == "__main__":
     #     y,pl = obj_func(x)
     #     y_init.append(y)
     #     pl_init.append(pl)
-    if l == 6 and g == 3:
-        if lambda_ == 1:
-            init_data_file = (
-                f"./data/BO_initial_points/BO_initial_points_{dataset_index}_1.0_63.pkl"
-            )
-        else:
-            init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_{lambda_}_63.pkl"
+    if code_class == "gbb":
+        init_data_file = "./data/BO_initial_points/GBB_BO_initial_points_{dataset_index}_{lambda_}_{l}_{g}.pkl"
+    else:  # bb
+        if l == 6 and g == 3:
+            if lambda_ == 1:
+                init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_1.0_63.pkl"
+            else:
+                init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_{lambda_}_63.pkl"
 
-    else:
-        if lambda_ == 1:
-            init_data_file = (
-                f"./data/BO_initial_points/BO_initial_points_{dataset_index}_1.0.pkl"
-            )
         else:
-            init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_{lambda_}.pkl"
-    # file with 63 suffix has (l,m)=(6,3). Otherwise (l,m)=(12,6)
+            if lambda_ == 1:
+                init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_1.0.pkl"
+            else:
+                init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_{lambda_}.pkl"
+        # file with 63 suffix has (l,m)=(6,3). Otherwise (l,m)=(12,6)
+
+    if not os.path.exists(init_data_file):
+        # no starting codes exist, so generate some:
+        init_num = 20  # TODO check pkls see how big they are
+        print(f"Generating and evaluating {init_num} initial {code_class} codes...")
+        X_init = gnp(init_num)
+        y_init = []
+        pl_init = []
+        for i, x in enumerate(X_init):
+            y, pl = obj_func(x)
+            y_init.append(y)
+            pl_init.append(pl)
+            print("Evaluated initial code {i}/{init_num} (score={y:.4f})")
+
+        with open(init_data_file, "wb") as f:
+            pickle.dump({"X": X_init, "y": y_init, "pl": pl_init}, f)
+            print(f"Saved initial points to {init_data_file}")
+
+    print(f"Loading initial codes from {init_data_file}...")
     with open(init_data_file, "rb") as f:
         data = pickle.load(f)
         X_init = data["X"]
@@ -1137,7 +1208,7 @@ if __name__ == "__main__":
     )
 
     # hill climbing:
-    def bb_validator(candidate_np):
+    def code_validator(candidate_np):
         return code_constructor.construct(candidate_np).k != 0
 
     next_points_num = 4
@@ -1147,8 +1218,10 @@ if __name__ == "__main__":
         gnp=gnp,  # get new points function
         acquisition=acq,
         device=DEVICE,
-        validator=bb_validator,
+        validator=code_validator,
+        method=code_class,
     )
+
     # assemble BO
     bo_iterations = 50
     bo = BO_on_QEC(
@@ -1161,7 +1234,7 @@ if __name__ == "__main__":
         initial_pl=pl_init,
         initial_y=y_init,
         BO_iterations=bo_iterations,
-        description="BB-BO (GP+EI+HC)",
+        description=f"{code_class.upper()}-BO (GP+EI+HC)",
         device=DEVICE,
         pretrain=True,
     )
@@ -1173,7 +1246,8 @@ if __name__ == "__main__":
     flat = y_init_list + flat
 
     with open(
-        f"./data/BO_results/BO_{l}_{g}_{dataset_index}_{seed}_{lambda_}.pkl", "wb"
+        f"./data/BO_results/{code_class}_BO_{l}_{g}_{dataset_index}_{seed}_{lambda_}.pkl",
+        "wb",
     ) as f:
         results = {"best_x": best_x, "best_y": best_y, "evaluation_history": flat}
         pickle.dump(results, f)
