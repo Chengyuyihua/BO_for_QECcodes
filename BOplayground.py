@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from torch.nn.utils import clip_grad_norm_
 from torch.distributions.normal import Normal
+import sympy as sp
 
 from code_construction.code_construction import CodeConstructor
 from bayesian_optimization.objective_function import ObjectiveFunction
@@ -983,17 +984,27 @@ def set_all_seeds(seed: int = 42):
 
 class Get_new_points_function:
     def __init__(
-        self, method="qc-ldpc-hgp", code_constructor=None, encode="None", density=None
+        self,
+        method="qc-ldpc-hgp",
+        code_constructor=None,
+        encode="None",
+        density=None,
+        desired_k=None,
+        rho=None,
     ):
         self.method = method
         self.code_constructor = code_constructor
         self.encode = encode
         self.density = density
         self.init = False
+        self.desired_k = desired_k
+        self.rho = rho
 
     def get_new_points_function(self, number):
         if self.method == "qc-ldpc-hgp":
             new_points = self.get_new_points_HGP(number)
+        elif self.method == "gb":
+            new_points = self.get_new_gb_vector(number)
         elif self.method == "bb":
             new_points = self.get_new_bb_vector(number)
         elif self.method == "gbb":
@@ -1006,6 +1017,59 @@ class Get_new_points_function:
             self.hyperparameters["m"] + 1,
             (number, self.hyperparameters["p"] * self.hyperparameters["q"]),
         )
+
+    def _get_irreducable_factors(self, l) -> list[int]:
+        x = sp.Symbol("x")
+        poly = x**l - 1
+        _, factors_counts = sp.factor_list(poly, domain=sp.GF(2))
+
+        int_factors = []
+        for factor, count in factors_counts:
+            coeffs = sp.Poly(factor, x).all_coeffs()
+            binary_coeffs = [int(c) % 2 for c in coeffs][::-1]
+
+            # convert binary array to int
+            factor_int = sum([bit * (1 << i) for i, bit in enumerate(binary_coeffs)])
+
+            for _ in range(count):
+                int_factors.append(factor_int)
+
+        return int_factors
+
+    def get_new_gb_vector(self, number):
+        results = []
+        l = self.code_constructor.para_dict["l"]
+        factors = self._get_irreducable_factors(l)
+        max_bound = 2 ** (l - (gx_bin.bit_length() - 1))
+        # maybe let user pick factors here for g
+        # TODO decide gx_mask
+        gx_mask = 0
+        gx_bin = 1
+        for i in range(gx_mask.bit_length()):
+            if (gx_mask >> i) & 1:
+                gx_bin = self.multiply_polynomials_mod_l(gx_bin, fs[i], l)
+
+        while number > 0:
+            qa = np.random.randint(1, max_bound)
+            weight_a = self.code_constructor.multiply_polynomials_mod_l(
+                g, qa, l
+            ).bit_count()
+            if weight_a != self.rho:
+                continue
+
+            weight_b = -1
+            while weight_b != self.rho:
+                qb = np.random.randint(1, max_bound)
+                weight_b = self.code_constructor.multiply_polynomials_mod_l(
+                    g, qb, l
+                ).bit_count()
+
+            parameters = [gx_mask, qa, qb] + factors
+
+            results.append(parameters)
+            number -= 1
+
+        return np.array(results)
 
     def get_new_bb_vector(self, number):
         results = []

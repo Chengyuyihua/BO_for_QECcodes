@@ -436,38 +436,48 @@ class CodeConstructor:
                 # Place H_ij in the corresponding block of H
                 H[i * m : (i + 1) * m, j * m : (j + 1) * m] = H_ij
         return H
-    
+
+    def multiply_polynomials_mod_l(self, p1, p2, l) -> int:
+        res = 0
+        for i in range(p2.bit_length()):
+            if (p2 >> i) & 1:  # checks i-th bit is 1
+                shifted = p1 << i
+                overflow = (
+                    shifted >> l
+                )  # mod x^l, higher degree polynomials wrap around
+                not_overflow = shifted & ((1 << l) - 1)
+                res ^= not_overflow ^ overflow
+
+        return res
+
     def generalised_bicycle_code(self, parameters) -> CSSCode:
-        # calculate factors of x^l - 1: f1, f2, ... fn. each is a number corresponding to a binary string (5=101=x2+1)
-        # g(x) is a number corresponding to a binary string representing which factors it is made from  (6=110=f1*f2)
-        # a(x) is a multiple of g(x): a(x) = g(x) * q(x). q(x) is represented like fn. to mutate a(x), flip 1 bit in q(x)
-        # coefficients of a(x) make the first row of A, make square and circulant. same for b(x), same g(x) but * q'(x)
-        
-        # parameters: f1, ..., fn, g(x), q(x), q'(x)
+        """
+        parameters = [gx_mask, qa, qb, f1, ..., fn]
+        gx_mask (int): binary mask of which irreducable factors of (x^l - 1) make up q(x)
+        qa (int): binary representation of polynomial q_a(x)
+        qb (int): binary representation of polynomial q_b(x)
+        fk (int): binary representation of the irreducable factors of (x^l - 1)
+        """
         l = self.para_dict["l"]
-    
-        parameters = parameters.split(',')
-        gx, qa, qb = parameters[-3:]
-        fs = parameters[:-3]
 
-        # TODO fix this math stuff
+        gx_mask, qa, qb = parameters[:3]
+        fs = parameters[3:]
 
-        gx_bin_list = np.array([fs[i] for i in gx]).flatten()
-        gx_bin = int(''.join(map(str, gx_bin_list)), 2)
+        # compute g(x) polynomial
+        gx_bin = 1
+        for i in range(gx_mask.bit_length()):
+            if (gx_mask >> i) & 1:
+                gx_bin = self.multiply_polynomials_mod_l(gx_bin, fs[i], l)
 
-        a = 0
-        for i, bit in enumerate(qa):
-            a ^= (gx_bin * bit) << i
-        a = [int(bit) for bit in bin(a)[2:]] 
+        # calculate a(x) = g(x) * q_a(x), b(x) = g(x) * q_b(x)
+        a_int = self.multiply_polynomials_mod_l(gx_bin, qa, l)
+        b_int = self.multiply_polynomials_mod_l(gx_bin, qb, l)
 
-        b = 0
-        for i, bit in enumerate(qb):
-            b ^= (gx_bin * bit) << i
-        b = [int(bit) for bit in bin(b)[2:]] 
+        a_array = [int(bit) for bit in bin(a_int)[2:].zfill(l)[::-1]]
+        b_array = [int(bit) for bit in bin(b_int)[2:].zfill(l)[::-1]]
 
-
-        A = np.array([[a]])
-        B = np.array([[b]])
+        A = np.array([[a_array]])
+        B = np.array([[b_array]])
 
         return self.quasi_cyclic_generalized_bicycle_code({"A": A, "B": B})
 
