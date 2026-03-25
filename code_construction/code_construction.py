@@ -71,9 +71,7 @@ class CodeConstructor:
 
     def __init__(self, method="qc-ldpc-hgp", para_dict=None) -> None:
         """
-        method(str): The method of the code construction, 'canonical', 'qc-ldpc-hgp', 'bivariate-bycicle','rotated-surface','qc-gb'.
-
-
+        method(str): The method of the code construction, 'canonical', 'qc-ldpc-hgp', 'bivariate-bycicle','rotated-surface','qc-gb'
         """
         self.method = method
         self.para_dict = para_dict
@@ -139,6 +137,8 @@ class CodeConstructor:
             return self.arbitrary_bivariate_bicycle_code(parameters)
         elif self.method == "gbb":
             return self.generalised_bivariate_bicycle_code(parameters)
+        elif self.method == "gb":
+            return self.generalised_bicycle_code(parameters)
         elif self.method == "symmetric-qc-gb":
             return self.symmetric_quasi_cyclic_generalized_bicycle_code(parameters)
         else:
@@ -436,6 +436,40 @@ class CodeConstructor:
                 # Place H_ij in the corresponding block of H
                 H[i * m : (i + 1) * m, j * m : (j + 1) * m] = H_ij
         return H
+    
+    def generalised_bicycle_code(self, parameters) -> CSSCode:
+        # calculate factors of x^l - 1: f1, f2, ... fn. each is a number corresponding to a binary string (5=101=x2+1)
+        # g(x) is a number corresponding to a binary string representing which factors it is made from  (6=110=f1*f2)
+        # a(x) is a multiple of g(x): a(x) = g(x) * q(x). q(x) is represented like fn. to mutate a(x), flip 1 bit in q(x)
+        # coefficients of a(x) make the first row of A, make square and circulant. same for b(x), same g(x) but * q'(x)
+        
+        # parameters: f1, ..., fn, g(x), q(x), q'(x)
+        l = self.para_dict["l"]
+    
+        parameters = parameters.split(',')
+        gx, qa, qb = parameters[-3:]
+        fs = parameters[:-3]
+
+        # TODO fix this math stuff
+
+        gx_bin_list = np.array([fs[i] for i in gx]).flatten()
+        gx_bin = int(''.join(map(str, gx_bin_list)), 2)
+
+        a = 0
+        for i, bit in enumerate(qa):
+            a ^= (gx_bin * bit) << i
+        a = [int(bit) for bit in bin(a)[2:]] 
+
+        b = 0
+        for i, bit in enumerate(qb):
+            b ^= (gx_bin * bit) << i
+        b = [int(bit) for bit in bin(b)[2:]] 
+
+
+        A = np.array([[a]])
+        B = np.array([[b]])
+
+        return self.quasi_cyclic_generalized_bicycle_code({"A": A, "B": B})
 
     def bivariate_bycicle_construction(self, parameters) -> CSSCode:
         """
@@ -574,14 +608,12 @@ class CodeConstructor:
         return B_a
 
     def g_power(self, g_size, p):
-
         g_p = np.zeros((g_size, g_size), dtype=int)
         for i in range(g_size):
             g_p[i][int((i + p) % g_size)] = 1
         return g_p
 
     def arbitrary_bivariate_bicycle_code(self, parameters):
-
         # a=[a_0,a_1,...,a_{l+g-2}] is a rep of coefficient of  A=a_0*I + a_1*x + a_2*x^2 +...+ a_{l-1}*x^{l-1} + a_l*y + a_{l+1}*y^2 +...+ a_{l+g-2}*y^{g-1}
         l = self.para_dict["l"]
         g = self.para_dict["g"]
@@ -626,6 +658,17 @@ class CodeConstructor:
                         A[i][(i + j) % l][k] = 1
                     if b[idx] == 1:
                         B[i][(i + j) % l][k] = 1
+
+        # untested vectorised optimisation:
+        # a_base = parameters[: (l * g)].reshape(l, g)
+        # b_base = parameters[(l * g) :].reshape(l, g)
+
+        # row_idx = np.arange(l)[:, None]
+        # col_idx = np.arange(l)[None, :]
+        # shift_matrix = (col_idx - row_idx) % l
+
+        # A = a_base[shift_matrix]
+        # B = b_base[shift_matrix]
 
         return self.quasi_cyclic_generalized_bicycle_code({"A": A, "B": B})
 
