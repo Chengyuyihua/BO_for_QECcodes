@@ -437,7 +437,8 @@ class CodeConstructor:
                 H[i * m : (i + 1) * m, j * m : (j + 1) * m] = H_ij
         return H
 
-    def multiply_polynomials_mod_l(self, p1, p2, l) -> int:
+    @staticmethod
+    def multiply_polynomials_mod_l(p1, p2, l) -> int:
         res = 0
         for i in range(p2.bit_length()):
             if (p2 >> i) & 1:  # checks i-th bit is 1
@@ -449,6 +450,16 @@ class CodeConstructor:
                 res ^= not_overflow ^ overflow
 
         return res
+
+    @staticmethod
+    def gx_mask_to_bin(gx_mask, fs, l) -> int:
+        gx_bin = 1
+
+        for i in range(gx_mask.bit_length()):
+            if (gx_mask >> i) & 1:
+                gx_bin = CodeConstructor.multiply_polynomials_mod_l(gx_bin, fs[i], l)
+
+        return gx_bin
 
     def generalised_bicycle_code(self, parameters) -> CSSCode:
         """
@@ -464,14 +475,11 @@ class CodeConstructor:
         fs = parameters[3:]
 
         # compute g(x) polynomial
-        gx_bin = 1
-        for i in range(gx_mask.bit_length()):
-            if (gx_mask >> i) & 1:
-                gx_bin = self.multiply_polynomials_mod_l(gx_bin, fs[i], l)
+        gx_bin = self.gx_mask_to_bin(gx_mask, fs, l)
 
         # calculate a(x) = g(x) * q_a(x), b(x) = g(x) * q_b(x)
-        a_int = self.multiply_polynomials_mod_l(gx_bin, qa, l)
-        b_int = self.multiply_polynomials_mod_l(gx_bin, qb, l)
+        a_int = CodeConstructor.multiply_polynomials_mod_l(gx_bin, qa, l)
+        b_int = CodeConstructor.multiply_polynomials_mod_l(gx_bin, qb, l)
 
         a_array = [int(bit) for bit in bin(a_int)[2:].zfill(l)[::-1]]
         b_array = [int(bit) for bit in bin(b_int)[2:].zfill(l)[::-1]]

@@ -42,8 +42,12 @@ class HillClimbing:
             validator  # 例如 lambda z: code_constructor.construct(z).k != 0
         )
         match method:
+            case "gb":
+                self.mutate = self.swap_factors
             case "gbb":
-                self.mutate = self.swap_neighbours
+                self.mutate = (
+                    self.swap_neighbours
+                )  # or self.swap_neighbours_within_matrices
             case "bb":
                 self.mutate = self.flip_neighbours
             case _:
@@ -74,6 +78,58 @@ class HillClimbing:
                 n[i] == 0.0
                 n[j] == 1.0
                 neigh_list.append(n)
+        return torch.stack(neigh_list, dim=0)
+
+    def swap_factors(self, x: torch.Tensor) -> torch.Tensor:
+        l = gnp.code_constructor.para_dict["l"]
+        target_row_weight = gnp.code_constructor.rho
+
+        x = x.detach()
+
+        gx_mask = int(x[0].item())
+        qa = int(x[1].item())
+        qb = int(x[2].item())
+        fs = [int(f.item()) for f in x[3:]]
+
+        gx_bin = CodeConstructor.gx_mask_to_bin(gx_mask, fs, l)
+
+        max_bound = 2 ** (l - (gx_bin.bit_length() - 1))
+
+        neigh_list = []
+        for i in range(max_bound.bit_length()):
+            for j in range(i, max_bound.bit_length()):
+                if i == j:
+                    new_qa = qa ^ (1 << i)  # flips one factor of qa
+                    new_qb = qb ^ (1 << i)
+                else:
+                    new_qa = qa ^ (1 << i) ^ (1 << j)  # flips two factors of qa
+                    new_qb = qb ^ (1 << i) ^ (1 << j)
+
+                a_weight = CodeConstructor.multiply_polynomials_mod_l(
+                    gx_bin, new_qa, l
+                ).bit_count()
+
+                b_weight = CodeConstructor.multiply_polynomials_mod_l(
+                    gx_bin, new_qb, l
+                ).bit_count()
+
+                if (
+                    a_weight == target_row_weight
+                ):  # checks if new a(x) preserves LDPC density
+                    n1 = x.clone()
+                    n1[1] = new_qa
+                    neigh_list.append(n1)
+
+                if (
+                    b_weight == target_row_weight
+                ):  # checks if new b(x) preserves LDPC density
+                    n2 = x.clone()
+                    n2[2] = new_qb
+                    neigh_list.append(n2)
+
+        if not neigh_list:
+            return torch.empty((0, len(x)), dtype=x.dtype, device=x.device)
+
         return torch.stack(neigh_list, dim=0)
 
     # only swaps within A and B so that both matrices always have the same number of 1s
@@ -1040,19 +1096,17 @@ class Get_new_points_function:
         results = []
         l = self.code_constructor.para_dict["l"]
         factors = self._get_irreducable_factors(l)
-        max_bound = 2 ** (l - (gx_bin.bit_length() - 1))
         # maybe let user pick factors here for g
         # TODO decide gx_mask
         gx_mask = 0
-        gx_bin = 1
-        for i in range(gx_mask.bit_length()):
-            if (gx_mask >> i) & 1:
-                gx_bin = self.multiply_polynomials_mod_l(gx_bin, fs[i], l)
+        gx_bin = CodeConstructor.gx_mask_to_bin(gx_mask, factors, l)
+
+        max_bound = 2 ** (l - (gx_bin.bit_length() - 1))
 
         while number > 0:
             qa = np.random.randint(1, max_bound)
-            weight_a = self.code_constructor.multiply_polynomials_mod_l(
-                g, qa, l
+            weight_a = CodeConstructor.multiply_polynomials_mod_l(
+                gx_bin, qa, l
             ).bit_count()
             if weight_a != self.rho:
                 continue
@@ -1060,8 +1114,8 @@ class Get_new_points_function:
             weight_b = -1
             while weight_b != self.rho:
                 qb = np.random.randint(1, max_bound)
-                weight_b = self.code_constructor.multiply_polynomials_mod_l(
-                    g, qb, l
+                weight_b = CodeConstructor.multiply_polynomials_mod_l(
+                    gx_bin, qb, l
                 ).bit_count()
 
             parameters = [gx_mask, qa, qb] + factors
