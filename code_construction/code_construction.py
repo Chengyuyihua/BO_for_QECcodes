@@ -92,6 +92,14 @@ class CodeConstructor:
         #     return self.check_bivariate_bycicle_parameters_validity()
         elif self.method == "rotated-surface":
             return True
+        elif self.method == "gb":
+            try:
+                self.n = self.para_dict["l"] * 2
+                self.nx = self.n
+                self.nz = self.n
+            except:
+                raise ValueError("failing setting n,nx,nz")
+            return True
         elif self.method in [
             "qc-gb",
             "bivariate-bycicle",
@@ -471,8 +479,8 @@ class CodeConstructor:
         """
         l = self.para_dict["l"]
 
-        gx_mask, qa, qb = parameters[:3]
-        fs = parameters[3:]
+        gx_mask, qa, qb = [int(x) for x in parameters[:3]]
+        fs = [int(x) for x in parameters[3:]]
 
         # compute g(x) polynomial
         gx_bin = self.gx_mask_to_bin(gx_mask, fs, l)

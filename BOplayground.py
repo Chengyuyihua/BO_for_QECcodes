@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch.nn.utils import clip_grad_norm_
 from torch.distributions.normal import Normal
-import sympy as sp
+import sympy
 
 from code_construction.code_construction import CodeConstructor
 from bayesian_optimization.objective_function import ObjectiveFunction
@@ -32,6 +32,8 @@ class HillClimbing:
         device="cuda",
         validator=None,
         method="bb",
+        l=None,
+        target_row_weight=None,
     ):
 
         self.next_points_num = int(next_points_num)
@@ -41,6 +43,8 @@ class HillClimbing:
         self.validator = (
             validator  # 例如 lambda z: code_constructor.construct(z).k != 0
         )
+        self.l = l
+        self.target_row_weight = target_row_weight
         match method:
             case "gb":
                 self.mutate = self.swap_factors
@@ -81,9 +85,6 @@ class HillClimbing:
         return torch.stack(neigh_list, dim=0)
 
     def swap_factors(self, x: torch.Tensor) -> torch.Tensor:
-        l = gnp.code_constructor.para_dict["l"]
-        target_row_weight = gnp.code_constructor.rho
-
         x = x.detach()
 
         gx_mask = int(x[0].item())
@@ -91,9 +92,9 @@ class HillClimbing:
         qb = int(x[2].item())
         fs = [int(f.item()) for f in x[3:]]
 
-        gx_bin = CodeConstructor.gx_mask_to_bin(gx_mask, fs, l)
+        gx_bin = CodeConstructor.gx_mask_to_bin(gx_mask, fs, self.l)
 
-        max_bound = 2 ** (l - (gx_bin.bit_length() - 1))
+        max_bound = 2 ** (self.l - (gx_bin.bit_length() - 1))
 
         neigh_list = []
         for i in range(max_bound.bit_length()):
@@ -106,22 +107,22 @@ class HillClimbing:
                     new_qb = qb ^ (1 << i) ^ (1 << j)
 
                 a_weight = CodeConstructor.multiply_polynomials_mod_l(
-                    gx_bin, new_qa, l
+                    gx_bin, new_qa, self.l
                 ).bit_count()
 
                 b_weight = CodeConstructor.multiply_polynomials_mod_l(
-                    gx_bin, new_qb, l
+                    gx_bin, new_qb, self.l
                 ).bit_count()
 
                 if (
-                    a_weight == target_row_weight
+                    a_weight == self.target_row_weight
                 ):  # checks if new a(x) preserves LDPC density
                     n1 = x.clone()
                     n1[1] = new_qa
                     neigh_list.append(n1)
 
                 if (
-                    b_weight == target_row_weight
+                    b_weight == self.target_row_weight
                 ):  # checks if new b(x) preserves LDPC density
                     n2 = x.clone()
                     n2[2] = new_qb
@@ -1046,7 +1047,7 @@ class Get_new_points_function:
         encode="None",
         density=None,
         desired_k=None,
-        rho=None,
+        gx_mask=None,
     ):
         self.method = method
         self.code_constructor = code_constructor
@@ -1054,7 +1055,8 @@ class Get_new_points_function:
         self.density = density
         self.init = False
         self.desired_k = desired_k
-        self.rho = rho
+        self.gx_mask = gx_mask
+        self.factors = None
 
     def get_new_points_function(self, number):
         if self.method == "qc-ldpc-hgp":
@@ -1074,14 +1076,14 @@ class Get_new_points_function:
             (number, self.hyperparameters["p"] * self.hyperparameters["q"]),
         )
 
-    def _get_irreducable_factors(self, l) -> list[int]:
-        x = sp.Symbol("x")
+    def _get_irreducible_factors(self, l) -> list[int]:
+        x = sympy.Symbol("x")
         poly = x**l - 1
-        _, factors_counts = sp.factor_list(poly, domain=sp.GF(2))
+        _, factors_counts = sympy.factor_list(poly, domain=sympy.GF(2))
 
         int_factors = []
         for factor, count in factors_counts:
-            coeffs = sp.Poly(factor, x).all_coeffs()
+            coeffs = sympy.Poly(factor, x).all_coeffs()
             binary_coeffs = [int(c) % 2 for c in coeffs][::-1]
 
             # convert binary array to int
@@ -1092,36 +1094,84 @@ class Get_new_points_function:
 
         return int_factors
 
+    def _get_possible_gx_bitmasks(self, factors):
+        if self.desired_k is None:
+            raise ValueError(
+                "A desired value of k is required for GB codes if g(x) bitmask not provided."
+            )
+
+        target_degree = self.desired_k // 2
+        no_factors = len(factors)
+
+        degrees = [f.bit_length() - 1 for f in factors]
+        valid_bitmasks = []
+
+        for i in range(1, 1 << no_factors):  # iterate through all possible bitmasks
+            degree = 0
+            for j in range(no_factors):
+                if (i >> j) & 1:
+                    degree += degrees[j]
+            if degree == target_degree:
+                valid_bitmasks.append(i)
+
+        return valid_bitmasks
+
+    def set_gx_mask(self):
+        l = self.code_constructor.para_dict["l"]
+        self.factors = self._get_irreducible_factors(l)
+        if self.gx_mask is not None:
+            if not (self.gx_mask > 0 and self.gx_mask < (1 << len(self.factors))):
+                raise ValueError(
+                    f"Provided g(x) bitmask {self.gx_mask} is not valid: must be int in range [1, {(1 << len(self.factors)) - 1}] for l={l}"
+                )
+        else:
+            possible_gx_masks = self._get_possible_gx_bitmasks(self.factors)
+            self.gx_mask = random.choice(possible_gx_masks)
+            print(f"Randomly selected g(x) bitmask = {self.gx_mask}")
+
     def get_new_gb_vector(self, number):
         results = []
         l = self.code_constructor.para_dict["l"]
-        factors = self._get_irreducable_factors(l)
-        # maybe let user pick factors here for g
-        # TODO decide gx_mask
-        gx_mask = 0
-        gx_bin = CodeConstructor.gx_mask_to_bin(gx_mask, factors, l)
+
+        gx_bin = CodeConstructor.gx_mask_to_bin(self.gx_mask, self.factors, l)
 
         max_bound = 2 ** (l - (gx_bin.bit_length() - 1))
 
         while number > 0:
-            qa = np.random.randint(1, max_bound)
-            weight_a = CodeConstructor.multiply_polynomials_mod_l(
-                gx_bin, qa, l
-            ).bit_count()
-            if weight_a != self.rho:
-                continue
+            batch_guesses = np.random.randint(1, max_bound, size=10_000)
+            qa_found = False
 
-            weight_b = -1
-            while weight_b != self.rho:
-                qb = np.random.randint(1, max_bound)
-                weight_b = CodeConstructor.multiply_polynomials_mod_l(
-                    gx_bin, qb, l
+            for qa in batch_guesses:
+                qa = qa.item()
+
+                # qa = np.random.randint(1, max_bound)
+                weight_a = CodeConstructor.multiply_polynomials_mod_l(
+                    gx_bin, qa, l
                 ).bit_count()
+                # if weight_a != self.density:
+                #     continue
+                if weight_a == self.density:
+                    qa_found = True
+                    break
 
-            parameters = [gx_mask, qa, qb] + factors
+            if qa_found:
+                qb_found = False
+                while not qb_found:
+                    batch_guesses = np.random.randint(1, max_bound, size=10_000)
 
-            results.append(parameters)
-            number -= 1
+                    for qb in batch_guesses:
+                        qb = qb.item()
+                        weight_b = CodeConstructor.multiply_polynomials_mod_l(
+                            gx_bin, qb, l
+                        ).bit_count()
+                        if weight_b == self.density:
+                            qb_found = True
+                            break
+
+                parameters = [self.gx_mask, qa, qb] + self.factors
+
+                results.append(parameters)
+                number -= 1
 
         return np.array(results)
 
@@ -1186,32 +1236,33 @@ if __name__ == "__main__":
 
     # default values
     code_class = "bb"
-    density = 3
+    density = 4
+    seed = 42
+    dataset_index = 0
+    lambda_ = 1
+    desired_k = None
+    gx_mask = 1
 
     args = sys.argv[1:]
     if args[0].isalpha():
         code_class = args.pop(0)
 
-    if len(args) == 3:
+    if len(args) >= 3:
         seed = int(args[1])
         dataset_index = int(args[2])
-        lambda_ = 1
-    elif len(args) == 4:
-        seed = int(args[1])
-        dataset_index = int(args[2])
+    if len(args) >= 4:
         lambda_ = float(args[3])
-    elif len(args) == 5:
-        seed = int(args[1])
-        dataset_index = int(args[2])
-        lambda_ = float(args[3])
+    if len(args) >= 5:
         density = int(args[4])
-    else:
-        seed = 42
-        dataset_index = 0
-        lambda_ = 1
+    if len(args) >= 6:
+        if args[5][:2] == "k=":
+            desired_k = int(args[5][2:])
+        elif args[5][:2] == "g=":
+            gx_mask = int(args[5][2:])
 
     set_all_seeds(seed)
-    l = 12
+    # l = 12
+    l = 7
     g = 6  # g here is m in Bravyi et al's paper
     print(
         f"(l,g)=({l},{g}), dataset_index = {dataset_index}, seed={seed}, lambda = {lambda_}"
@@ -1228,9 +1279,14 @@ if __name__ == "__main__":
     obj_func = Obj_Func.forward
     pl_to_obj = Obj_Func.pl_to_obj_with_std
     # method of sampling new points
-    gnp = Get_new_points_function(
-        method=code_class, code_constructor=code_constructor, density=density
-    ).get_new_points_function
+    gnp_obj = Get_new_points_function(
+        method=code_class,
+        code_constructor=code_constructor,
+        density=density,
+        desired_k=desired_k,
+        gx_mask=gx_mask,
+    )
+    gnp = gnp_obj.get_new_points_function
     # initial points:
     # init_num = 20
     # X_init = gnp(init_num)
@@ -1240,7 +1296,10 @@ if __name__ == "__main__":
     #     y,pl = obj_func(x)
     #     y_init.append(y)
     #     pl_init.append(pl)
-    if code_class == "gbb":
+    if code_class == "gb":
+        gnp_obj.set_gx_mask()
+        init_data_file = f"./data/BO_initial_points/GB_BO_initial_points_{dataset_index}_{lambda_}_{density}_{l}_{gnp_obj.gx_mask}.pkl"
+    elif code_class == "gbb":
         init_data_file = f"./data/BO_initial_points/GBB_BO_initial_points_{dataset_index}_{lambda_}_{density}_{l}_{g}.pkl"
     else:  # bb
         if l == 6 and g == 3:
@@ -1348,6 +1407,8 @@ if __name__ == "__main__":
         device=DEVICE,
         validator=code_validator,
         method=code_class,
+        l=l,
+        target_row_weight=density,
     )
 
     # assemble BO
@@ -1373,9 +1434,8 @@ if __name__ == "__main__":
     y_init_list = [i.item() for i in y_init]
     flat = y_init_list + flat
 
-    with open(
-        f"./data/BO_results/{code_class}_BO_{l}_{g}_{dataset_index}_{seed}_{lambda_}.pkl",
-        "wb",
-    ) as f:
+    results_file = init_data_file.replace("BO_initial_points", "BO_results")
+
+    with open(results_file, "wb") as f:
         results = {"best_x": best_x, "best_y": best_y, "evaluation_history": flat}
         pickle.dump(results, f)
