@@ -468,6 +468,19 @@ class CodeConstructor:
                 gx_bin = CodeConstructor.multiply_polynomials_mod_l(gx_bin, fs[i], l)
 
         return gx_bin
+    
+    def _build_circulant_matrix(self, row) -> np.ndarray:
+        length = len(row)
+        col_idx = np.arange(length)[None, :]
+        row_idx = np.arange(length)[:, None]
+    
+        shift_matrix = (col_idx - row_idx) % length
+        return row[shift_matrix]
+    
+    def _build_bicycle_css_code(self, A, B) -> CSSCode:
+        HX = np.hstack((A, B))
+        HZ = np.hstack((B.T, A.T))
+        return CSSCode(HX, HZ)
 
     def generalised_bicycle_code(self, parameters) -> CSSCode:
         """
@@ -489,13 +502,13 @@ class CodeConstructor:
         a_int = CodeConstructor.multiply_polynomials_mod_l(gx_bin, qa, l)
         b_int = CodeConstructor.multiply_polynomials_mod_l(gx_bin, qb, l)
 
-        a_array = [int(bit) for bit in bin(a_int)[2:].zfill(l)[::-1]]
-        b_array = [int(bit) for bit in bin(b_int)[2:].zfill(l)[::-1]]
+        a_array = np.array([int(bit) for bit in bin(a_int)[2:].zfill(l)[::-1]])
+        b_array = np.array([int(bit) for bit in bin(b_int)[2:].zfill(l)[::-1]])
 
-        A = np.array([[a_array]])
-        B = np.array([[b_array]])
+        A = self._build_circulant_matrix(a_array)
+        B = self._build_circulant_matrix(b_array)
 
-        return self.quasi_cyclic_generalized_bicycle_code({"A": A, "B": B})
+        return self._build_bicycle_css_code(A, B)
 
     def bivariate_bycicle_construction(self, parameters) -> CSSCode:
         """
@@ -536,16 +549,8 @@ class CodeConstructor:
                 B += np.linalg.matrix_power(y, (B_p[i][1] % m))
         A = A % 2
         B = B % 2
-        # for i in A:
-        #     for j in i:
-        #         print(f'{int(j)} ',end='')
-        #     print()
-        # print(f'A:\n{A}\n,B:\n{B}')
-        HX = np.hstack((A, B))
-        HZ = np.hstack((B.T, A.T))
-        # print(f'n:{2*l*m}\n,rank(A):\n{np.linalg.matrix_rank(A)},\n\nrank(B):\n{np.linalg.matrix_rank(B)}')
-        css = CSSCode(HX, HZ)
-        return css
+
+        return self._build_bicycle_css_code(A, B)
 
     def pg_ldpc_hgp_construction(self, M):
         H1 = self.pg_ldpc_construction(

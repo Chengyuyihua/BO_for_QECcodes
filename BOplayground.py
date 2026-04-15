@@ -94,11 +94,11 @@ class HillClimbing:
 
         gx_bin = CodeConstructor.gx_mask_to_bin(gx_mask, fs, self.l)
 
-        max_bound = 2 ** (self.l - (gx_bin.bit_length() - 1))
+        max_bound = self.l - (gx_bin.bit_length() - 1)
 
         neigh_list = []
-        for i in range(max_bound.bit_length()):
-            for j in range(i, max_bound.bit_length()):
+        for i in range(max_bound):
+            for j in range(i, max_bound):
                 if i == j:
                     new_qa = qa ^ (1 << i)  # flips one factor of qa
                     new_qb = qb ^ (1 << i)
