@@ -2,6 +2,8 @@ device = "cuda"
 DEVICE = "cuda"
 import os
 import random
+from abc import ABC, abstractmethod
+from __future__ import annotations
 import numpy as np
 import torch
 from torch.nn.utils import clip_grad_norm_
@@ -337,15 +339,65 @@ TensorLike = Union[torch.Tensor, np.ndarray, float]
 
 
 @dataclass
-class LogStdStats:
-    """Stores the fitted statistics (mean, std, eps) for log-domain normalization."""
+class StdStats:
+    mean: float
+    scale: float
 
-    mean: float  # mean of log(pl + eps)
-    scale: float  # std of log(pl + eps)
-    eps: float  # epsilon used in log(pl + eps)
+@dataclass
+class LogStdStats(StdStats):
+    eps: float
+    
 
+class Normalizer(ABC):
+    def __init__(
+        self,
+        device: str = "cpu",
+    ):
+        self._fitted: bool = False
+        self.device = device
 
-class LogStdNormalizer:
+    def _to_tensor(self, x: TensorLike, dtype=torch.float32) -> torch.Tensor:
+        """Convert input (np.ndarray, float, or Tensor) to a torch.Tensor on the correct device."""
+        if isinstance(x, torch.Tensor):
+            return x.to(self.device, dtype=dtype)
+        arr = np.asarray(x)
+        return torch.tensor(arr, device=self.device, dtype=dtype)
+    
+    @abstractmethod
+    def fit(self, y: TensorLike) -> Normalizer:
+        pass
+
+    @abstractmethod
+    def transform(self, y: TensorLike) -> torch.Tensor:
+        pass
+
+    @abstractmethod
+    def inverse_transform(self, z: TensorLike) -> torch.Tensor:
+        pass
+
+    @abstractmethod
+    def inverse_mean_std(
+        self, mu_z: TensorLike, std_z: TensorLike
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        pass
+
+    def is_fitted(self) -> bool:
+        """Return whether the normalizer has been fitted."""
+        return self._fitted
+
+    def get_stats(self) -> LogStdStats:
+        """Return the current (mean, scale, eps) statistics."""
+        return self.stats
+    
+    def state_dict(self) -> Dict[str, Any]:
+        """Serialize current state to a Python dict."""
+        pass
+
+    def load_state_dict(self, state: Dict[str, Any]):
+        """Restore normalizer state from a dict."""
+        pass
+
+class LogStdNormalizer(Normalizer):
     """
     A normalizer that transforms probabilities `pl ∈ (0,1)` into a standardized latent space via:
 
@@ -360,19 +412,12 @@ class LogStdNormalizer:
         max_prob: float = 1.0 - 1e-12,
         device: str = "cpu",
     ):
+        super().__init__(device)
         self.stats: LogStdStats = LogStdStats(mean=0.0, scale=1.0, eps=float(eps))
-        self._fitted: bool = False
         self.min_prob = float(min_prob)
         self.max_prob = float(max_prob)
-        self.device = device
 
     # -------------------- Basic utilities --------------------
-    def _to_tensor(self, x: TensorLike, dtype=torch.float32) -> torch.Tensor:
-        """Convert input (np.ndarray, float, or Tensor) to a torch.Tensor on the correct device."""
-        if isinstance(x, torch.Tensor):
-            return x.to(self.device, dtype=dtype)
-        arr = np.asarray(x)
-        return torch.tensor(arr, device=self.device, dtype=dtype)
 
     def _clamp_prob(self, pl: torch.Tensor) -> torch.Tensor:
         """Clamp probabilities to [min_prob, max_prob] for numerical stability."""
@@ -380,11 +425,11 @@ class LogStdNormalizer:
 
     # -------------------- Fitting and transforms --------------------
     @torch.no_grad()
-    def fit(self, pl: TensorLike) -> "LogStdNormalizer":
+    def fit(self, y: TensorLike) -> LogStdNormalizer:
         """
         Fit mean and scale parameters from all observed probabilities (in log-domain).
         """
-        pl_t = self._to_tensor(pl, dtype=torch.float32).view(-1)
+        pl_t = self._to_tensor(y, dtype=torch.float32).view(-1)
         pl_t = self._clamp_prob(pl_t)
         ylog = torch.log(pl_t + self.stats.eps)
         mean = ylog.mean().item()
@@ -399,13 +444,13 @@ class LogStdNormalizer:
         return self
 
     @torch.no_grad()
-    def transform(self, pl: TensorLike) -> torch.Tensor:
+    def transform(self, y: TensorLike) -> torch.Tensor:
         """
         Transform from probability domain → standardized latent domain:
             z = (log(pl + eps) - mean) / scale
         """
         assert self._fitted, "Call fit(pl_train) before transform."
-        pl_t = self._to_tensor(pl, dtype=torch.float32)
+        pl_t = self._to_tensor(y, dtype=torch.float32)
         pl_t = self._clamp_prob(pl_t)
         ylog = torch.log(pl_t + self.stats.eps)
         z = (ylog - self.stats.mean) / self.stats.scale
@@ -461,20 +506,12 @@ class LogStdNormalizer:
         return mean_pl, std_pl
 
     # -------------------- State handling and serialization --------------------
-    def is_fitted(self) -> bool:
-        """Return whether the normalizer has been fitted."""
-        return self._fitted
-
-    def get_stats(self) -> LogStdStats:
-        """Return the current (mean, scale, eps) statistics."""
-        return self.stats
 
     def set_eps(self, eps: float):
         """Update epsilon used in log(pl + eps)."""
         self.stats.eps = float(eps)
 
     def state_dict(self) -> Dict[str, Any]:
-        """Serialize current state to a Python dict."""
         return {
             "stats": asdict(self.stats),
             "fitted": self._fitted,
@@ -484,7 +521,6 @@ class LogStdNormalizer:
         }
 
     def load_state_dict(self, state: Dict[str, Any]):
-        """Restore normalizer state from a dict."""
         s = state["stats"]
         self.stats = LogStdStats(
             mean=float(s["mean"]), scale=float(s["scale"]), eps=float(s["eps"])
@@ -494,6 +530,81 @@ class LogStdNormalizer:
         self.max_prob = float(state.get("max_prob", self.max_prob))
         self.device = state.get("device", self.device)
 
+class StdNormalizer(Normalizer):
+    """
+    A normalizer for distance (d) which standardizes values to
+        z = (d - mean) / std_dev
+
+    As error rate (pl) scales exponentially with d, LogStdNormalizer is used for pl
+    and linear standardization is used for d.
+    """
+
+    def __init__(self, device):
+        super().__init__(device)
+        self.stats: StdStats = StdStats(mean=0.0, scale=1.0)
+        
+
+    @torch.no_grad()
+    def fit(self, y: TensorLike) -> StdNormalizer:
+        d_t = self._to_tensor(y, dtype=torch.float32).view(-1)
+        mean = d_t.mean().item()
+        std = d_t.std(unbiased=False).item()
+
+        if std < 1e-12:
+            std = 1.0
+
+        self.stats = StdStats(mean=float(mean), scale=float(std))
+        self._fitted = True
+        return self
+
+
+    @torch.no_grad()
+    def transform(self, y: TensorLike) -> torch.Tensor:
+        assert self._fitted, "Call fit(d_train) before transform."
+
+        d_t = self._to_tensor(y, dtype=torch.float32)
+        z = (d_t - self.stats.mean) / self.stats.scale
+        return z
+
+
+    @torch.no_grad()
+    def inverse_transform(self, z: TensorLike) -> torch.Tensor:
+        assert self._fitted, "Call fit(d_train) before inverse_transform."
+
+        z_t = self._to_tensor(z, dtype=torch.float32)
+        d = z_t * self.stats.scale + self.stats.mean
+        return d
+        
+
+    @torch.no_grad()
+    def inverse_mean_std(
+        self, mu_z: TensorLike, std_z: TensorLike
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        assert self._fitted, "Call fit(d_train) before inverse_mean_std."
+
+        mu_z_t = self._to_tensor(mu_z, dtype=torch.float32)
+        std_z_t = self._to_tensor(std_z, dtype=torch.float32).abs()
+
+        mu = mu_z_t * self.stats.scale + self.stats.mean
+        std = std_z_t * abs(self.stats.scale)
+
+        return mu, std
+
+    def state_dict(self) -> Dict[str, Any]:
+        return {
+            "stats": asdict(self.stats),
+            "fitted": self._fitted,
+            "device": self.device,
+        }
+
+    def load_state_dict(self, state: Dict[str, Any]):
+        s = state["stats"]
+        self.stats = StdStats(
+            mean=float(s["mean"]), scale=float(s["scale"])
+        )
+        self._fitted = bool(state.get("fitted", True))
+        self.device = state.get("device", self.device)
+        
 
 class GPTrainer:
     """
