@@ -102,7 +102,7 @@ class BO_on_QEC:
         self.suggest_next = suggest_next
         self.device = device
 
-        self.X = initial_X.to(self.device, dtype=torch.float32)
+        self.X = initial_X.to(self.device, dtype=torch.float64)
         self.pl = initial_pl.to(
             self.device, dtype=torch.float32
         )  # probability space labels
@@ -151,7 +151,7 @@ class BO_on_QEC:
         self.gp.eval()
         if hasattr(self.gp, "likelihood") and self.gp.likelihood is not None:
             self.gp.likelihood.eval()
-        X_tensor = X_tensor.to(self.device, dtype=torch.float32)
+        X_tensor = X_tensor.to(self.device, dtype=torch.float64)
         with gpytorch.settings.fast_pred_var():
             if hasattr(self.gp, "posterior"):
                 post = self.gp.posterior(X_tensor)
@@ -194,7 +194,7 @@ class BO_on_QEC:
 
             # --- Step 1: suggest candidates ---
             t0 = time.time()
-            next_points = self.suggest_next(self.gp)  # torch.float32, [n, d], on device
+            next_points = self.suggest_next(self.gp)  # torch.float64, [n, d], on device
             t_next = time.time()
 
             # --- Step 1b: pre-evaluation predictions for diagnostics ---
@@ -215,7 +215,7 @@ class BO_on_QEC:
             # --- Step 2: single-sample evaluations (objective & true pl) ---
             y_list, pl_list = [], []
             next_points_np = (
-                next_points.detach().round().clamp(0, 1).cpu().numpy().astype("int64")
+                next_points.detach().round().cpu().numpy().astype("int64")
             )
             for i in range(next_points_np.shape[0]):
                 y_i, pl_i = self.objective_function(next_points_np[i])

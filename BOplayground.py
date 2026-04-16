@@ -163,10 +163,8 @@ class HillClimbing:
 
     @torch.no_grad()
     def __call__(self, gp) -> torch.Tensor:
-
-        # 起点：np -> torch.float32 on device
         X0_np = self.gnp(self.next_points_num)  # [n, d], 0/1
-        X0 = torch.tensor(X0_np, dtype=torch.float32, device=self.device)
+        X0 = torch.tensor(X0_np, dtype=torch.float64, device=self.device)
 
         best_list = []
         for x in X0:  # x: [d]
@@ -188,7 +186,7 @@ class HillClimbing:
 
             best_list.append(best_neighbor)
 
-        cand = torch.stack(best_list, dim=0)  # [n, d], float32, 0/1
+        cand = torch.stack(best_list, dim=0)  # [n, d], float64, 0/1
 
         if self.validator is not None:
             cand_np = cand.detach().cpu().numpy().astype(np.int64)
@@ -200,9 +198,9 @@ class HillClimbing:
                         cand_np[i] = self.gnp(1)
                         if tries > 1000:
                             break
-            cand = torch.tensor(cand_np, dtype=torch.float32, device=self.device)
+            cand = torch.tensor(cand_np, dtype=torch.float64, device=self.device)
 
-        return cand  # [n, d], float32(0/1), on device
+        return cand  # [n, d], float64(0/1), on device
 
 
 class EIAcquisitionFunction:
@@ -322,10 +320,10 @@ class EIAcquisitionFunction:
 
         # Ensure X is a proper tensor on the correct device
         if not torch.is_tensor(X):
-            X = torch.tensor(X, dtype=torch.float32)
+            X = torch.tensor(X, dtype=torch.float64)
         if X.ndim == 1:
             X = X.unsqueeze(0)
-        X = X.to(self.device, dtype=torch.float32)
+        X = X.to(self.device, dtype=torch.float64)
 
         # Evaluation mode for GP
         gp.eval()
@@ -1339,8 +1337,8 @@ if __name__ == "__main__":
         y_init = data["y"]
         pl_init = data["pl"]
 
-    X_init = torch.tensor(X_init, dtype=torch.float32)
-    X_init.to(DEVICE)
+    X_init = torch.tensor(X_init, dtype=torch.float64)
+    X_init.to(DEVICE)  # think this line should be X_init = X_init.to(DEVICE)
     y_init = torch.tensor(y_init, dtype=torch.float32)
     y_init.to(DEVICE)
     pl_init = torch.tensor(pl_init, dtype=torch.float32)
