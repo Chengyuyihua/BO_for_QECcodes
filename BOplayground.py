@@ -48,10 +48,6 @@ class HillClimbing:
         match method:
             case "gb":
                 self.mutate = self.swap_factors
-            case "gbb":
-                self.mutate = (
-                    self.swap_neighbours
-                )  # or self.swap_neighbours_within_matrices
             case "bb":
                 self.mutate = self.flip_neighbours
             case _:
@@ -67,22 +63,6 @@ class HillClimbing:
             n[i] = 1.0 - n[i]
             neigh_list.append(n)
         return torch.stack(neigh_list, dim=0)  # [d, d]
-
-    # allows swapping between A and B
-    def swap_neighbours(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.detach()
-
-        ones_indices = torch.where(x[1:] == 1.0)[0] + 1  # dont swap anchor 1 at [0,0]
-        zeros_indices = torch.where(x == 0)[0]
-
-        neigh_list = []
-        for i in ones_indices:
-            for j in zeros_indices:
-                n = x.clone()
-                n[i] == 0.0
-                n[j] == 1.0
-                neigh_list.append(n)
-        return torch.stack(neigh_list, dim=0)
 
     def swap_factors(self, x: torch.Tensor) -> torch.Tensor:
         x = x.detach()
@@ -130,34 +110,6 @@ class HillClimbing:
 
         if not neigh_list:
             return torch.empty((0, len(x)), dtype=x.dtype, device=x.device)
-
-        return torch.stack(neigh_list, dim=0)
-
-    # only swaps within A and B so that both matrices always have the same number of 1s
-    def swap_neighbours_within_matrices(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.detach()
-        half_length = x.size()[0] // 2
-
-        ones_indices_A = torch.where(x[1:half_length] == 1.0)[0] + 1
-        zeros_indices_A = torch.where(x[:half_length] == 0)[0]
-
-        neigh_list = []
-        for i in ones_indices_A:
-            for j in zeros_indices_A:
-                n = x.clone()
-                n[i] == 0.0
-                n[j] == 1.0
-                neigh_list.append(n)
-
-        ones_indices_B = torch.where(x[half_length:] == 1.0)[0]
-        zeros_indices_B = torch.where(x[half_length:] == 0)[0]
-
-        for i in ones_indices_B:
-            for j in zeros_indices_B:
-                n = x.clone()
-                n[i] == 0.0
-                n[j] == 1.0
-                neigh_list.append(n)
 
         return torch.stack(neigh_list, dim=0)
 
@@ -1063,8 +1015,6 @@ class Get_new_points_function:
             new_points = self.get_new_gb_vector(number)
         elif self.method == "bb":
             new_points = self.get_new_bb_vector(number)
-        elif self.method == "gbb":
-            new_points = self.get_new_gbb_vector(number)
         return new_points
 
     def get_new_points_HGP(self, number):
@@ -1200,33 +1150,6 @@ class Get_new_points_function:
                 number -= 1
         return np.array(results)
 
-    def get_new_gbb_vector(self, number):
-        results = []
-        l = self.code_constructor.para_dict["l"]
-        g = self.code_constructor.para_dict["g"]
-
-        while number > 0:
-            new_point = np.zeros(shape=(2 * l * g))
-            new_point[0] = 1  # fix x^0 * y^0 = 1 to ignore identical shifted codes
-
-            indexes = np.random.permutation(l * g)
-            for i in range(
-                self.density - 1
-            ):  # density: number of 1s in both A and B, fixed to ensure sparsity
-                new_point[indexes[i]] = 1
-
-            np.random.shuffle(indexes)
-            for i in range(self.density):
-                new_point[indexes[i] + l * g] = 1
-
-            c = self.code_constructor.construct(new_point)
-            if c.k == 0:
-                continue
-            else:
-                results.append(new_point)
-                number -= 1
-        return np.array(results)
-
 
 if __name__ == "__main__":
     import pickle
@@ -1297,8 +1220,6 @@ if __name__ == "__main__":
     if code_class == "gb":
         gnp_obj.set_gx_mask()
         init_data_file = f"./data/BO_initial_points/GB_BO_initial_points_{dataset_index}_{lambda_}_{density}_{l}_{gnp_obj.gx_mask}.pkl"
-    elif code_class == "gbb":
-        init_data_file = f"./data/BO_initial_points/GBB_BO_initial_points_{dataset_index}_{lambda_}_{density}_{l}_{g}.pkl"
     else:  # bb
         if l == 6 and g == 3:
             if lambda_ == 1:

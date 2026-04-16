@@ -105,9 +105,8 @@ class CodeConstructor:
             "bivariate-bycicle",
             "bb",
             "symmetric-qc-gb",
-            "gbb",
         ]:
-            if self.method in ["bb", "bivariate-bycicle", "gbb"]:
+            if self.method in ["bb", "bivariate-bycicle"]:
                 try:
                     self.n = self.para_dict["l"] * self.para_dict["g"]
                     self.nx = self.n
@@ -143,8 +142,6 @@ class CodeConstructor:
             return self.quasi_cyclic_generalized_bicycle_code(parameters)
         elif self.method == "bivariate-bycicle" or self.method == "bb":
             return self.arbitrary_bivariate_bicycle_code(parameters)
-        elif self.method == "gbb":
-            return self.generalised_bivariate_bicycle_code(parameters)
         elif self.method == "gb":
             return self.generalised_bicycle_code(parameters)
         elif self.method == "symmetric-qc-gb":
@@ -468,15 +465,15 @@ class CodeConstructor:
                 gx_bin = CodeConstructor.multiply_polynomials_mod_l(gx_bin, fs[i], l)
 
         return gx_bin
-    
+
     def _build_circulant_matrix(self, row) -> np.ndarray:
         length = len(row)
         col_idx = np.arange(length)[None, :]
         row_idx = np.arange(length)[:, None]
-    
+
         shift_matrix = (col_idx - row_idx) % length
         return row[shift_matrix]
-    
+
     def _build_bicycle_css_code(self, A, B) -> CSSCode:
         HX = np.hstack((A, B))
         HZ = np.hstack((B.T, A.T))
@@ -668,38 +665,6 @@ class CodeConstructor:
                     A[i][i][j + 1] = (A[i][i][j + 1] + 1) % 2
                 if b[j + l] == 1:
                     B[i][i][j + 1] = (B[i][i][j + 1] + 1) % 2
-
-        return self.quasi_cyclic_generalized_bicycle_code({"A": A, "B": B})
-
-    def generalised_bivariate_bicycle_code(self, parameters):
-        l = self.para_dict["l"]
-        g = self.para_dict["g"]
-
-        a = parameters[: (l * g)]
-        b = parameters[(l * g) :]
-
-        A = np.zeros((l, l, g), dtype=int)
-        B = np.zeros((l, l, g), dtype=int)
-
-        for i in range(l):
-            for j in range(l):
-                for k in range(g):
-                    idx = (j * g) + k
-                    if a[idx] == 1:
-                        A[i][(i + j) % l][k] = 1
-                    if b[idx] == 1:
-                        B[i][(i + j) % l][k] = 1
-
-        # untested vectorised optimisation:
-        # a_base = parameters[: (l * g)].reshape(l, g)
-        # b_base = parameters[(l * g) :].reshape(l, g)
-
-        # row_idx = np.arange(l)[:, None]
-        # col_idx = np.arange(l)[None, :]
-        # shift_matrix = (col_idx - row_idx) % l
-
-        # A = a_base[shift_matrix]
-        # B = b_base[shift_matrix]
 
         return self.quasi_cyclic_generalized_bicycle_code({"A": A, "B": B})
 

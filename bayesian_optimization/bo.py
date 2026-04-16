@@ -214,9 +214,7 @@ class BO_on_QEC:
 
             # --- Step 2: single-sample evaluations (objective & true pl) ---
             y_list, pl_list = [], []
-            next_points_np = (
-                next_points.detach().round().cpu().numpy().astype("int64")
-            )
+            next_points_np = next_points.detach().round().cpu().numpy().astype("int64")
             for i in range(next_points_np.shape[0]):
                 y_i, pl_i = self.objective_function(next_points_np[i])
                 y_list.append(float(y_i) if torch.is_tensor(y_i) else y_i)
