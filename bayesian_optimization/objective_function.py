@@ -5,6 +5,7 @@ from code_construction.code_construction import *
 from evaluation.circuit_level_noise import (
     MonteCarloEstimationOfLogicalErrorRateUnderCircuitLevelNoise,
 )
+import qldpc
 
 
 # =========================
@@ -242,12 +243,14 @@ class ObjectiveFunction:
         decoder_param={"trail": 10000, "max_error": 100},
         circuit_level_noise=False,
         circuit_param=None,
+        code_eval_metric="LER",
     ):
         self.code_constructor = code_constructor
         self.n = int(code_constructor.n)
         self.pp = float(pp)
         self.decoder_param = dict(decoder_param)
         self.lambda_ = lambda_
+        self.code_eval_metric = code_eval_metric
 
         # Converters
         self.pl_t_converter = pl_t_converter(self.n, p_phys=self.pp, use_pchip=True)
@@ -283,7 +286,7 @@ class ObjectiveFunction:
             arr = np.asarray(x, dtype=np.int64)
         return arr
 
-    def ler(self, css):
+    def ler(self, css: CSSCode):
         """Compute the logical error rate, either via circuit-level or decoder-based simulation."""
         if self.circuit_level_noise:
             mc = MonteCarloEstimationOfLogicalErrorRateUnderCircuitLevelNoise(
@@ -345,8 +348,17 @@ class ObjectiveFunction:
         t_hat = self.pl_t_converter.pl_to_t(k=None, pl=pL)
         return float(t_hat), float(pL)
 
+    def distance(self, css: CSSCode) -> int:
+        code = qldpc.codes.CSSCode(css.hx, css.hz)
+        distance = code.get_distance()  # this is expensive, TODO add some timeout mechanic to prevent hangs and do some benchmarking
+
+        if distance <= 0:
+            distance = 1
+
+        return distance
+
     def forward(self, x):
-        """Compute the scalar objective F(x) and the corresponding total pL."""
+        """Compute the scalar objective F(x) and the corresponding total pL or distance."""
         css = self.code_constructor.construct(self._to_np_bits(x))
         k = int(css.k)
         self._last_k = k
@@ -354,10 +366,21 @@ class ObjectiveFunction:
             return float(-1.0), float(1.0)
 
         R = k / float(self.n)
-        t_hat, pL_total = self.psuedo_t(css)
-        f2_val = float(self.f2_converter.t_to_f2(t_hat))
-        F = self.lambda_ * R + f2_val - 1.0
-        return float(F), float(pL_total)
+        if self.code_eval_metric == "LER":
+            t_hat, pL_total = self.psuedo_t(css)
+            f2_val = float(self.f2_converter.t_to_f2(t_hat))
+            F = self.lambda_ * R + f2_val - 1.0
+            return float(F), float(pL_total)
+        elif self.code_eval_metric == "distance":
+            d = self.distance(css)
+            t = (d - 1) / 2  # correctable errors
+            f2_val = float(self.f2_converter.t_to_f2(t))
+            F = self.lambda_ * R + f2_val - 1.0
+            return float(F), float(d)
+        else:
+            raise ValueError(
+                f"Code evaluation metric '{self.code_eval_metric}' is not supported."
+            )
 
     # ---------------------------
     # Uncertainty propagation: from (pL_mean, pL_std) → (F_mean, F_std)

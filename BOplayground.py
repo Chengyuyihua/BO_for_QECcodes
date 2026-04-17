@@ -14,7 +14,7 @@ from bayesian_optimization.encoder import *
 from bayesian_optimization.chaincomplexembedding import *
 from bayesian_optimization.gp import *
 from bayesian_optimization.bo import BO_on_QEC
-from Normalizer import LogStdNormalizer
+from Normalizer import LogStdNormalizer, StdNormalizer
 
 import gpytorch
 from gpytorch.mlls import ExactMarginalLogLikelihood
@@ -1030,10 +1030,15 @@ if __name__ == "__main__":
     para_dict = {"l": l, "g": g}
 
     code_constructor = CodeConstructor(method=code_class, para_dict=para_dict)
+    code_eval_metric = "distance"  # TODO add this to arg handling
     # define objective function
     pp = 0.05
     Obj_Func = ObjectiveFunction(
-        code_constructor, lambda_=lambda_, pp=pp, decoder_param={"trail": 10_000}
+        code_constructor,
+        lambda_=lambda_,
+        pp=pp,
+        decoder_param={"trail": 10_000},
+        code_eval_metric=code_eval_metric,
     )
     obj_func = Obj_Func.forward
     pl_to_obj = Obj_Func.pl_to_obj_with_std
@@ -1138,6 +1143,12 @@ if __name__ == "__main__":
         log_every=8,
         save_best_state=True,
     )
+
+    if code_eval_metric == "distance":
+        normalizer = StdNormalizer(device=DEVICE)
+    else:
+        normalizer = None
+
     # acquisition function:
     acq = EIAcquisitionFunction(
         pl_to_obj_fn=pl_to_obj,
@@ -1145,7 +1156,7 @@ if __name__ == "__main__":
         jitter=1e-2,
         eps=1e-9,
         device=DEVICE,
-        normalizer=None,
+        normalizer=normalizer,
         prob_lower=1e-12,
         prob_upper=1.0 - 1e-12,
         log_eps=1e-8,
