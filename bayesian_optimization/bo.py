@@ -93,6 +93,7 @@ class BO_on_QEC:
         description="",
         device="cpu",
         pretrain=True,
+        code_eval_metric="LER",
     ):
 
         self.gp = gp
@@ -101,8 +102,11 @@ class BO_on_QEC:
         self.acquisition_function = acquisition_function
         self.suggest_next = suggest_next
         self.device = device
+        self.code_eval_metric = code_eval_metric
 
         self.X = initial_X.to(self.device, dtype=torch.float64)
+        # if code_eval_metric is distance, pl is true distance rather than true pl (logical error rate)
+        # all similarly named pl variables will also refer to distance rather than LER (TODO fix varibale names)
         self.pl = initial_pl.to(
             self.device, dtype=torch.float32
         )  # probability space labels
@@ -182,10 +186,19 @@ class BO_on_QEC:
         pbar = tqdm.tqdm(range(self.BO_iterations), desc=self.description)
 
         # TSV for online diagnostics (pred vs. true); easy to inspect externally.
+        if self.code_eval_metric == "LER":
+            eval_name = "pl"
+        elif self.code_eval_metric == "distance":
+            eval_name = "d"
+        else:
+            raise ValueError(
+                f"Code evaluation metric '{self.code_eval_metric}' is not supported."
+            )
+
         metrics_tsv = open("pred_vs_true.tsv", "a", encoding="utf-8")
         if metrics_tsv.tell() == 0:
             metrics_tsv.write(
-                "round\tidx\tmu_pl\tstd_pl\tpl_true\tr_pl\tz_true\tmu_z\tstd_z\tr_z\tcover68_pl\tcover95_pl\n"
+                f"round\tidx\tmu_{eval_name}\tstd_{eval_name}\t{eval_name}_true\tr_{eval_name}\tz_true\tmu_z\tstd_z\tr_z\tcover68_{eval_name}\tcover95_{eval_name}\n"
             )
 
         for rnd in pbar:
@@ -209,7 +222,11 @@ class BO_on_QEC:
                     mu_z_pred, std_z_pred
                 )
             )
-            mu_pl_pred = mu_pl_pred.clamp(1e-12, 1.0 - 1e-12)
+            if self.code_eval_metric == "LER":
+                mu_pl_pred = mu_pl_pred.clamp(1e-12, 1.0 - 1e-12)
+            else:  # code_eval_metric == "distance"
+                mu_pl_pred = mu_pl_pred.clamp_min(1e-12)
+
             std_pl_pred = std_pl_pred.clamp_min(1e-12)
 
             # --- Step 2: single-sample evaluations (objective & true pl) ---
@@ -256,24 +273,24 @@ class BO_on_QEC:
                 m_rec = {
                     "round": int(rnd),
                     "idx": int(i),
-                    "mu_pl": float(mu_pl.item()),
-                    "std_pl": float(sp.item()),
-                    "pl_true": float(pl_t.item()),
-                    "r_pl": r_pl,
+                    f"mu_{eval_name}": float(mu_pl.item()),
+                    f"std_{eval_name}": float(sp.item()),
+                    f"{eval_name}_true": float(pl_t.item()),
+                    f"r_{eval_name}": r_pl,
                     "z_true": float(z_t.item()),
                     "mu_z": float(mu_z.item()),
                     "std_z": float(sz.item()),
                     "r_z": r_z,
-                    "cover68_pl": bool(cover68),
-                    "cover95_pl": bool(cover95),
+                    f"cover68_{eval_name}": bool(cover68),
+                    f"cover95_{eval_name}": bool(cover95),
                 }
                 iter_metrics.append(m_rec)
                 # Append a TSV line
                 metrics_tsv.write(
-                    f"{m_rec['round']}\t{m_rec['idx']}\t{m_rec['mu_pl']:.6e}\t{m_rec['std_pl']:.6e}\t"
-                    f"{m_rec['pl_true']:.6e}\t{m_rec['r_pl']:.3f}\t{m_rec['z_true']:.6e}\t"
+                    f"{m_rec['round']}\t{m_rec['idx']}\t{m_rec[f'mu_{eval_name}']:.6e}\t{m_rec[f'std_{eval_name}']:.6e}\t"
+                    f"{m_rec[f'{eval_name}_true']:.6e}\t{m_rec[f'r_{eval_name}']:.3f}\t{m_rec['z_true']:.6e}\t"
                     f"{m_rec['mu_z']:.6e}\t{m_rec['std_z']:.6e}\t{m_rec['r_z']:.3f}\t"
-                    f"{int(m_rec['cover68_pl'])}\t{int(m_rec['cover95_pl'])}\n"
+                    f"{int(m_rec[f'cover68_{eval_name}'])}\t{int(m_rec[f'cover95_{eval_name}'])}\n"
                 )
             metrics_tsv.flush()
             self.pred_vs_true_history.append(iter_metrics)

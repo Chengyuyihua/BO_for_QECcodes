@@ -253,6 +253,7 @@ class ObjectiveFunction:
         self.code_eval_metric = code_eval_metric
 
         # Converters
+        # TODO rename references to pl, as could be evaluating distance instead
         self.pl_t_converter = pl_t_converter(self.n, p_phys=self.pp, use_pchip=True)
         self.f2_converter = f2_converter(self.n, use_pchip=True)
 

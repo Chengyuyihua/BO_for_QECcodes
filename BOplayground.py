@@ -1001,10 +1001,18 @@ if __name__ == "__main__":
     lambda_ = 1
     desired_k = None
     gx_mask = 1
+    code_eval_metric = "LER"
 
     args = sys.argv[1:]
     if args[0].isalpha():
         code_class = args.pop(0)
+
+    if args[0][0] == "-":  # -l for LER or -d for distance
+        flag = args.pop(0)[1:]
+        if flag == "l":
+            code_eval_metric = "LER"
+        elif flag == "d":
+            code_eval_metric = "distance"
 
     if len(args) >= 3:
         seed = int(args[1])
@@ -1030,7 +1038,6 @@ if __name__ == "__main__":
     para_dict = {"l": l, "g": g}
 
     code_constructor = CodeConstructor(method=code_class, para_dict=para_dict)
-    code_eval_metric = "distance"  # TODO add this to arg handling
     # define objective function
     pp = 0.05
     Obj_Func = ObjectiveFunction(
@@ -1051,30 +1058,27 @@ if __name__ == "__main__":
         gx_mask=gx_mask,
     )
     gnp = gnp_obj.get_new_points_function
-    # initial points:
-    # init_num = 20
-    # X_init = gnp(init_num)
-    # y_init = []
-    # pl_init = []
-    # for x in X_init:
-    #     y,pl = obj_func(x)
-    #     y_init.append(y)
-    #     pl_init.append(pl)
+
+    if code_eval_metric == "distance":
+        distance_path_flag = "_d"
+    else:
+        distance_path_flag = ""
+
     if code_class == "gb":
         gnp_obj.set_gx_mask()
-        init_data_file = f"./data/BO_initial_points/GB_BO_initial_points_{dataset_index}_{lambda_}_{density}_{l}_{gnp_obj.gx_mask}.pkl"
+        init_data_file = f"./data/BO_initial_points/GB_BO_initial_points{distance_path_flag}_{dataset_index}_{lambda_}_{density}_{l}_{gnp_obj.gx_mask}.pkl"
     else:  # bb
         if l == 6 and g == 3:
             if lambda_ == 1:
-                init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_1.0_63.pkl"
+                init_data_file = f"./data/BO_initial_points/BO_initial_points{distance_path_flag}_{dataset_index}_1.0_63.pkl"
             else:
-                init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_{lambda_}_63.pkl"
+                init_data_file = f"./data/BO_initial_points/BO_initial_points{distance_path_flag}_{dataset_index}_{lambda_}_63.pkl"
 
         else:
             if lambda_ == 1:
-                init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_1.0.pkl"
+                init_data_file = f"./data/BO_initial_points/BO_initial_points{distance_path_flag}_{dataset_index}_1.0.pkl"
             else:
-                init_data_file = f"./data/BO_initial_points/BO_initial_points_{dataset_index}_{lambda_}.pkl"
+                init_data_file = f"./data/BO_initial_points/BO_initial_points{distance_path_flag}_{dataset_index}_{lambda_}.pkl"
         # file with 63 suffix has (l,m)=(6,3). Otherwise (l,m)=(12,6)
 
     if not os.path.exists(init_data_file):
@@ -1194,6 +1198,7 @@ if __name__ == "__main__":
         description=f"{code_class.upper()}-BO (GP+EI+HC)",
         device=DEVICE,
         pretrain=True,
+        code_eval_metric=code_eval_metric,
     )
     best_x, best_y, evaluation_history = bo.run()
 
