@@ -21,6 +21,7 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 from gpytorch.kernels import RBFKernel, MaternKernel, SpectralMixtureKernel, ScaleKernel
 import copy
 from typing import Dict, Optional, Tuple, Any, List
+from argparse import ArgumentParser
 
 
 class HillClimbing:
@@ -988,74 +989,77 @@ class Get_new_points_function:
                 number -= 1
         return np.array(results)
 
+def get_args():
+    parser = ArgumentParser(description="Search for QECCs in a certain family using BO")
+
+    parser.add_argument('-c', '--code-class', default='bb', help='code class to search with BO')
+    parser.add_argument('--distance-exact', action='store_true', help='use exact code distance rather than LER to evaluate candidate codes')
+    parser.add_argument('--distance-heuristic', nargs='+', help='use a specified distance heuristic and parameters used to evaluate candidate codes')
+    parser.add_argument('-s', '--seed', default=42, type=int, help='seed')
+    parser.add_argument('-d', '--dataset-index', default=0, type=int, help='index of the dataset of starting codes')
+    parser.add_argument('--lam', default=1, type=int, help='lambda parameter of the objective function')
+    parser.add_argument('--polynomial-size', default=[12, 6], type=int, nargs='+', help='BB and GB codes only: sizes of polynomials a(x) and b(x)')
+    parser.add_argument('--density', type=int, help='GB codes only: density of polynomials used to construct parity check matrices for some codes')
+    parser.add_argument('--desired-k', type=int, help='GB codes only: desired number of logical qubits')
+    parser.add_argument('--gx-mask', type=int, help='GB codes only: bitmask of irreducible factors of (x^l - 1) that make up g(x)')
+
+    return parser.parse_args()
+
 
 if __name__ == "__main__":
     import pickle
-    import sys
 
-    # default values
-    code_class = "bb"
-    density = 4
-    seed = 42
-    dataset_index = 0
-    lambda_ = 1
-    desired_k = None
-    gx_mask = 1
-    code_eval_metric = "LER"
+    args = get_args()
 
-    args = sys.argv[1:]
-    if args[0].isalpha():
-        code_class = args.pop(0)
+    if args.distance_exact or args.distance_heuristic:
+        code_eval_metric = "distance"
+    else:
+        code_eval_metric = "LER"
 
-    if args[0][0] == "-":  # -l for LER or -d for distance
-        flag = args.pop(0)[1:]
-        if flag == "l":
-            code_eval_metric = "LER"
-        elif flag == "d":
-            code_eval_metric = "distance"
+    if args.distance_heuristic:
+        dist_method = args.distance_heuristic[0]
+        dist_params = None if not args.distance_heuristic[1:] else args.distance_heuristic[1:]
+    else:
+        dist_method = None
+        dist_params = None
 
-    if len(args) >= 3:
-        seed = int(args[1])
-        dataset_index = int(args[2])
-    if len(args) >= 4:
-        lambda_ = float(args[3])
-    if len(args) >= 5:
-        density = int(args[4])
-    if len(args) >= 6:
-        if args[5][:2] == "k=":
-            desired_k = int(args[5][2:])
-        elif args[5][:2] == "g=":
-            gx_mask = int(args[5][2:])
+    l = args.polynomial_size[0]
+    if len(args.polynomial_size) > 1:
+        g = args.polynomial_size[1]
+    else:
+        g = None
 
-    set_all_seeds(seed)
-    # l = 12
-    l = 7
-    g = 6  # g here is m in Bravyi et al's paper
+    set_all_seeds(args.seed)
+
     print(
-        f"(l,g)=({l},{g}), dataset_index = {dataset_index}, seed={seed}, lambda = {lambda_}"
+        f"(l,g)=({l},{g}), dataset_index = {args.dataset_index}, seed={args.seed}, lambda = {args.lam}"
     )
 
     para_dict = {"l": l, "g": g}
 
-    code_constructor = CodeConstructor(method=code_class, para_dict=para_dict)
+    code_constructor = CodeConstructor(method=args.code_class, para_dict=para_dict)
     # define objective function
     pp = 0.05
+
     Obj_Func = ObjectiveFunction(
         code_constructor,
-        lambda_=lambda_,
+        lambda_=args.lam,
         pp=pp,
         decoder_param={"trail": 10_000},
         code_eval_metric=code_eval_metric,
+        dist_method=dist_method,  # reccommend QDistEvol for BB codes
+        dist_params=dist_params,
+        dist_seed=args.seed
     )
     obj_func = Obj_Func.forward
     pl_to_obj = Obj_Func.pl_to_obj_with_std
     # method of sampling new points
     gnp_obj = Get_new_points_function(
-        method=code_class,
+        method=args.code_class,
         code_constructor=code_constructor,
-        density=density,
-        desired_k=desired_k,
-        gx_mask=gx_mask,
+        density=args.density,
+        desired_k=args.desired_k,
+        gx_mask=args.gx_mask,
     )
     gnp = gnp_obj.get_new_points_function
 
@@ -1064,27 +1068,27 @@ if __name__ == "__main__":
     else:
         distance_path_flag = ""
 
-    if code_class == "gb":
+    if args.code_class == "gb":
         gnp_obj.set_gx_mask()
-        init_data_file = f"./data/BO_initial_points/GB_BO_initial_points{distance_path_flag}_{dataset_index}_{lambda_}_{density}_{l}_{gnp_obj.gx_mask}.pkl"
+        init_data_file = f"./data/BO_initial_points/GB_BO_initial_points{distance_path_flag}_{args.dataset_index}_{args.lam}_{args.density}_{l}_{gnp_obj.gx_mask}.pkl"
     else:  # bb
         if l == 6 and g == 3:
-            if lambda_ == 1:
-                init_data_file = f"./data/BO_initial_points/BO_initial_points{distance_path_flag}_{dataset_index}_1.0_63.pkl"
+            if args.lam == 1:
+                init_data_file = f"./data/BO_initial_points/BO_initial_points{distance_path_flag}_{args.dataset_index}_1.0_63.pkl"
             else:
-                init_data_file = f"./data/BO_initial_points/BO_initial_points{distance_path_flag}_{dataset_index}_{lambda_}_63.pkl"
+                init_data_file = f"./data/BO_initial_points/BO_initial_points{distance_path_flag}_{args.dataset_index}_{args.lam}_63.pkl"
 
         else:
-            if lambda_ == 1:
-                init_data_file = f"./data/BO_initial_points/BO_initial_points{distance_path_flag}_{dataset_index}_1.0.pkl"
+            if args.lam == 1:
+                init_data_file = f"./data/BO_initial_points/BO_initial_points{distance_path_flag}_{args.dataset_index}_1.0.pkl"
             else:
-                init_data_file = f"./data/BO_initial_points/BO_initial_points{distance_path_flag}_{dataset_index}_{lambda_}.pkl"
+                init_data_file = f"./data/BO_initial_points/BO_initial_points{distance_path_flag}_{args.dataset_index}_{args.lam}.pkl"
         # file with 63 suffix has (l,m)=(6,3). Otherwise (l,m)=(12,6)
 
     if not os.path.exists(init_data_file):
         # no starting codes exist, so generate some:
         init_num = 20
-        print(f"Generating and evaluating {init_num} initial {code_class} codes...")
+        print(f"Generating and evaluating {init_num} initial {args.code_class} codes...")
         X_init = gnp(init_num)
         y_init = []
         pl_init = []
@@ -1178,9 +1182,9 @@ if __name__ == "__main__":
         acquisition=acq,
         device=DEVICE,
         validator=code_validator,
-        method=code_class,
+        method=args.code_class,
         l=l,
-        target_row_weight=density,
+        target_row_weight=args.density,
     )
 
     # assemble BO
@@ -1195,7 +1199,7 @@ if __name__ == "__main__":
         initial_pl=pl_init,
         initial_y=y_init,
         BO_iterations=bo_iterations,
-        description=f"{code_class.upper()}-BO (GP+EI+HC)",
+        description=f"{args.code_class.upper()}-BO (GP+EI+HC)",
         device=DEVICE,
         pretrain=True,
         code_eval_metric=code_eval_metric,
