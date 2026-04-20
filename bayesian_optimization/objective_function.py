@@ -6,7 +6,7 @@ from evaluation.circuit_level_noise import (
     MonteCarloEstimationOfLogicalErrorRateUnderCircuitLevelNoise,
 )
 import qldpc
-
+import codedistance
 
 # =========================
 # Utilities
@@ -244,6 +244,9 @@ class ObjectiveFunction:
         circuit_level_noise=False,
         circuit_param=None,
         code_eval_metric="LER",
+        dist_method=None,  # allows method from https://github.com/m-webster/codeDistancePYPI
+        dist_params={},
+        dist_seed=None,
     ):
         self.code_constructor = code_constructor
         self.n = int(code_constructor.n)
@@ -251,6 +254,9 @@ class ObjectiveFunction:
         self.decoder_param = dict(decoder_param)
         self.lambda_ = lambda_
         self.code_eval_metric = code_eval_metric
+        self.dist_method = dist_method
+        self.dist_params = dist_params
+        self.dist_seed = dist_seed
 
         # Converters
         # TODO rename references to pl, as could be evaluating distance instead
@@ -358,6 +364,16 @@ class ObjectiveFunction:
 
         return distance
 
+    def approximate_distance(self, css: CSSCode) -> int:
+        res = codedistance.CSScodeDistance(
+            css.hx,
+            css.hz,
+            method=self.dist_method,
+            params=self.dist_params,
+            seed=self.dist_seed,
+        )
+        return res["d"]
+
     def forward(self, x):
         """Compute the scalar objective F(x) and the corresponding total pL or distance."""
         css = self.code_constructor.construct(self._to_np_bits(x))
@@ -373,7 +389,10 @@ class ObjectiveFunction:
             F = self.lambda_ * R + f2_val - 1.0
             return float(F), float(pL_total)
         elif self.code_eval_metric == "distance":
-            d = self.distance(css)
+            if self.dist_method is None:  # exact distance calculation
+                d = self.distance(css)
+            else:  # distance heuristic
+                d = self.approximate_distance(css)
             t = (d - 1) / 2  # correctable errors
             f2_val = float(self.f2_converter.t_to_f2(t))
             F = self.lambda_ * R + f2_val - 1.0

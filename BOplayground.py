@@ -989,19 +989,54 @@ class Get_new_points_function:
                 number -= 1
         return np.array(results)
 
+
 def get_args():
     parser = ArgumentParser(description="Search for QECCs in a certain family using BO")
 
-    parser.add_argument('-c', '--code-class', default='bb', help='code class to search with BO')
-    parser.add_argument('--distance-exact', action='store_true', help='use exact code distance rather than LER to evaluate candidate codes')
-    parser.add_argument('--distance-heuristic', nargs='+', help='use a specified distance heuristic and parameters used to evaluate candidate codes')
-    parser.add_argument('-s', '--seed', default=42, type=int, help='seed')
-    parser.add_argument('-d', '--dataset-index', default=0, type=int, help='index of the dataset of starting codes')
-    parser.add_argument('--lam', default=1, type=int, help='lambda parameter of the objective function')
-    parser.add_argument('--polynomial-size', default=[12, 6], type=int, nargs='+', help='BB and GB codes only: sizes of polynomials a(x) and b(x)')
-    parser.add_argument('--density', type=int, help='GB codes only: density of polynomials used to construct parity check matrices for some codes')
-    parser.add_argument('--desired-k', type=int, help='GB codes only: desired number of logical qubits')
-    parser.add_argument('--gx-mask', type=int, help='GB codes only: bitmask of irreducible factors of (x^l - 1) that make up g(x)')
+    parser.add_argument(
+        "-c", "--code-class", default="bb", help="code class to search with BO"
+    )
+    parser.add_argument(
+        "--distance-exact",
+        action="store_true",
+        help="use exact code distance rather than LER to evaluate candidate codes",
+    )
+    parser.add_argument(
+        "--distance-heuristic",
+        nargs="+",
+        help="use a specified distance heuristic and parameters used to evaluate candidate codes",
+    )
+    parser.add_argument("-s", "--seed", default=42, type=int, help="seed")
+    parser.add_argument(
+        "-d",
+        "--dataset-index",
+        default=0,
+        type=int,
+        help="index of the dataset of starting codes",
+    )
+    parser.add_argument(
+        "--lam", default=1, type=int, help="lambda parameter of the objective function"
+    )
+    parser.add_argument(
+        "--polynomial-size",
+        default=[12, 6],
+        type=int,
+        nargs="+",
+        help="BB and GB codes only: sizes of polynomials a(x) and b(x)",
+    )
+    parser.add_argument(
+        "--density",
+        type=int,
+        help="GB codes only: density of polynomials used to construct parity check matrices for some codes",
+    )
+    parser.add_argument(
+        "--desired-k", type=int, help="GB codes only: desired number of logical qubits"
+    )
+    parser.add_argument(
+        "--gx-mask",
+        type=int,
+        help="GB codes only: bitmask of irreducible factors of (x^l - 1) that make up g(x)",
+    )
 
     return parser.parse_args()
 
@@ -1018,10 +1053,12 @@ if __name__ == "__main__":
 
     if args.distance_heuristic:
         dist_method = args.distance_heuristic[0]
-        dist_params = None if not args.distance_heuristic[1:] else args.distance_heuristic[1:]
+        dist_params = (
+            {} if not args.distance_heuristic[1:] else args.distance_heuristic[1:]
+        )
     else:
         dist_method = None
-        dist_params = None
+        dist_params = {}
 
     l = args.polynomial_size[0]
     if len(args.polynomial_size) > 1:
@@ -1049,7 +1086,7 @@ if __name__ == "__main__":
         code_eval_metric=code_eval_metric,
         dist_method=dist_method,  # reccommend QDistEvol for BB codes
         dist_params=dist_params,
-        dist_seed=args.seed
+        dist_seed=args.seed,
     )
     obj_func = Obj_Func.forward
     pl_to_obj = Obj_Func.pl_to_obj_with_std
@@ -1088,7 +1125,9 @@ if __name__ == "__main__":
     if not os.path.exists(init_data_file):
         # no starting codes exist, so generate some:
         init_num = 20
-        print(f"Generating and evaluating {init_num} initial {args.code_class} codes...")
+        print(
+            f"Generating and evaluating {init_num} initial {args.code_class} codes..."
+        )
         X_init = gnp(init_num)
         y_init = []
         pl_init = []
