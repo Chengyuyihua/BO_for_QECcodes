@@ -7,6 +7,8 @@ from evaluation.circuit_level_noise import (
 )
 import qldpc
 import codedistance
+from multiprocessing import Process, Queue
+import queue
 
 # =========================
 # Utilities
@@ -247,6 +249,7 @@ class ObjectiveFunction:
         dist_method=None,  # allows method from https://github.com/m-webster/codeDistancePYPI
         dist_params={},
         dist_seed=None,
+        dist_timeout=60 * 20,
     ):
         self.code_constructor = code_constructor
         self.n = int(code_constructor.n)
@@ -257,6 +260,7 @@ class ObjectiveFunction:
         self.dist_method = dist_method
         self.dist_params = dist_params
         self.dist_seed = dist_seed
+        self.dist_timeout = dist_timeout
 
         # Converters
         # TODO rename references to pl, as could be evaluating distance instead
@@ -355,10 +359,13 @@ class ObjectiveFunction:
         t_hat = self.pl_t_converter.pl_to_t(k=None, pl=pL)
         return float(t_hat), float(pL)
 
+    def _distance_worker(self, css: CSSCode, q: Queue):
+        d = self.distance(css)
+        q.put(d)
+
     def distance(self, css: CSSCode) -> int:
         code = qldpc.codes.CSSCode(css.hx, css.hz)
-        distance = code.get_distance()  # this is expensive, TODO add some timeout mechanic to prevent hangs and do some benchmarking
-
+        distance = code.get_distance()
         if distance <= 0:
             distance = 1
 
@@ -390,7 +397,28 @@ class ObjectiveFunction:
             return float(F), float(pL_total)
         elif self.code_eval_metric == "distance":
             if self.dist_method is None:  # exact distance calculation
-                d = self.distance(css)
+                # spawn separate process that can be timed out
+                q = Queue()
+                p = Process(target=self._distance_worker, args=(css, q))
+
+                p.start()
+                p.join(self.dist_timeout)
+
+                if p.is_alive():
+                    p.terminate()
+                    p.join()
+                    raise TimeoutError(
+                        f"Distance evaluation has timed out for code size n={css.n} "
+                        f"after running for {self.dist_timeout // 60} minutes. Consider "
+                        "using a distance approximation method instead with the option"
+                        "'--distance-heuristic', or increase the timeout time with '--distance-timeout'."
+                    )
+
+                try:
+                    d = q.get(block=False)
+                except queue.Empty:
+                    raise RuntimeError("Process died without returning a distance")
+
             else:  # distance heuristic
                 d = self.approximate_distance(css)
             t = (d - 1) / 2  # correctable errors

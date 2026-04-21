@@ -1002,6 +1002,12 @@ def get_args():
         help="use exact code distance rather than LER to evaluate candidate codes",
     )
     parser.add_argument(
+        "--distance-timeout",
+        default=20 * 60,  # default 20 minutes
+        type=int,
+        help=f"Distance-exact only: number of seconds before exact distance calculation times out. Default {60 * 20}s (20 minutes)",
+    )
+    parser.add_argument(
         "--distance-heuristic",
         nargs="+",
         help="use a specified distance heuristic and parameters used to evaluate candidate codes",
@@ -1087,6 +1093,7 @@ if __name__ == "__main__":
         dist_method=dist_method,  # reccommend QDistEvol for BB codes
         dist_params=dist_params,
         dist_seed=args.seed,
+        dist_timeout=args.distance_timeout,
     )
     obj_func = Obj_Func.forward
     pl_to_obj = Obj_Func.pl_to_obj_with_std
