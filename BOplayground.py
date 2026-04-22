@@ -1021,7 +1021,7 @@ def get_args():
         help="index of the dataset of starting codes",
     )
     parser.add_argument(
-        "--lam", default=1, type=int, help="lambda parameter of the objective function"
+        "--lam", default=1.0, type=float, help="lambda parameter of the objective function"
     )
     parser.add_argument(
         "--polynomial-size",
@@ -1044,7 +1044,27 @@ def get_args():
         help="GB codes only: bitmask of irreducible factors of (x^l - 1) that make up g(x)",
     )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.distance_exact and args.distance_heuristic:
+        raise ValueError("Cannot use both --distance-exact and --distance-heuristic")
+    
+    if args.distance_timeout and not args.distance_exact:
+        raise ValueError(f"--distance-timeout must be used alongside --distance-exact")
+    
+    if args.polynomial_size and args.code_class not in ['bb', 'gb']:
+        raise ValueError(f"--polynomial-size can only be used with bb or gb codes, not {args.code_class}")
+    
+    if args.density and args.code_class != 'gb':
+        raise ValueError(f"--density can only be used with gb codes, not {args.code_class}")
+    
+    if args.desired_k and args.code_class != 'gb':
+        raise ValueError(f"--desired-k can only be used with gb codes, not {args.code_class}")
+    
+    if args.gx_mask and args.code_class != 'gb':
+        raise ValueError(f"--gx-mask can only be used with gb codes, not {args.code_class}")
+
+    return args
 
 
 if __name__ == "__main__":
