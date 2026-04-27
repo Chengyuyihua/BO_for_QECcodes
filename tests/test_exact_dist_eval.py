@@ -20,6 +20,7 @@ from code_construction.code_construction import CSSCode
 
 # -----------------------------------------------------------------------
 
+
 class DummyCodeConstructor:
     def __init__(self):
         self.n = 1
@@ -29,14 +30,11 @@ class DummyCodeConstructor:
         return CSSCode(matrices[0], matrices[1])
 
 
-if __name__ == '__main__':
-    
+if __name__ == "__main__":
     print("Initializing...")
     cc = DummyCodeConstructor()
     obj = ObjectiveFunction(
-        code_constructor=cc, 
-        code_eval_metric="distance", 
-        dist_timeout=100
+        code_constructor=cc, code_eval_metric="distance", dist_timeout=100
     )
 
     small_code = qldpc.codes.SteaneCode()
@@ -45,7 +43,7 @@ if __name__ == '__main__':
 
     print("Running objective function...")
     _, d = obj.forward(small_code_matrices)
-    
+
     print(f"Calculated distance: {d}")
     assert d == small_known_distance
     print("Exact distance test passed!")
