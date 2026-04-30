@@ -1003,7 +1003,6 @@ def get_args():
     )
     parser.add_argument(
         "--distance-timeout",
-        default=20 * 60,  # default 20 minutes
         type=int,
         help=f"Distance-exact only: number of seconds before exact distance calculation times out. Default {60 * 20}s (20 minutes)",
     )
@@ -1028,7 +1027,6 @@ def get_args():
     )
     parser.add_argument(
         "--polynomial-size",
-        default=[12, 6],
         type=int,
         nargs="+",
         help="BB and GB codes only: sizes of polynomials a(x) and b(x)",
@@ -1103,11 +1101,14 @@ if __name__ == "__main__":
                     pass
                 dist_params[k] = v
 
-    l = args.polynomial_size[0]
-    if len(args.polynomial_size) > 1:
-        g = args.polynomial_size[1]
+    if not args.polynomial_size:
+        l, g = 12, 6  # default value
     else:
-        g = None
+        l = args.polynomial_size[0]
+        if len(args.polynomial_size) > 1:
+            g = args.polynomial_size[1]
+        else:
+            g = None
 
     set_all_seeds(args.seed)
 

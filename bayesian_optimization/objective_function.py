@@ -249,7 +249,7 @@ class ObjectiveFunction:
         dist_method=None,  # allows method from https://github.com/m-webster/codeDistancePYPI
         dist_params={},
         dist_seed=None,
-        dist_timeout=60 * 20,
+        dist_timeout=None,
     ):
         self.code_constructor = code_constructor
         self.n = int(code_constructor.n)
@@ -260,7 +260,10 @@ class ObjectiveFunction:
         self.dist_method = dist_method
         self.dist_params = dist_params
         self.dist_seed = dist_seed
-        self.dist_timeout = dist_timeout
+        if not dist_timeout:
+            self.dist_timeout = 60 * 20  # default: 20 minutes
+        else:
+            self.dist_timeout = dist_timeout
 
         # Converters
         # TODO rename references to pl, as could be evaluating distance instead
