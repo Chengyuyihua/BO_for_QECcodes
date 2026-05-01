@@ -92,9 +92,9 @@ def Get_distribution_dij(G, trails=1000):
 class CSS_Evaluator:
     def __init__(self, hx, hz):
         # print(f'initializing')
-        self.hx = hx
-        self.hz = hz
-        qcode = css_code(self.hx, self.hz)
+        qcode = css_code(hx, hz)
+        self.hx = qcode.hx
+        self.hz = qcode.hz
         self.lx = qcode.lx
         self.lz = qcode.lz  # logical operators
         self.k = qcode.K
@@ -390,26 +390,26 @@ class CSS_Evaluator:
     def Single_run(self, error_x, error_z):
 
         if error_z.any():
-            synd_z = (self.hx @ error_z) % 2
+            synd_z = (self.hx.dot(error_z)) % 2
             rec_z = self.bpd_z.decode(synd_z)
             residual_z = (error_z + rec_z) % 2
         else:
             residual_z = error_z.copy()
 
         if error_x.any():
-            synd_x = (self.hz @ error_x) % 2
+            synd_x = (self.hz.dot(error_x)) % 2
             rec_x = self.bpd_x.decode(synd_x)
             residual_x = (error_x + rec_x) % 2
         else:
             residual_x = error_x.copy()
 
-        sz_cleared = ((self.hx @ residual_z) % 2 == 0).all()
-        sx_cleared = ((self.hz @ residual_x) % 2 == 0).all()
+        sz_cleared = ((self.hx.dot(residual_z)) % 2 == 0).all()
+        sx_cleared = ((self.hz.dot(residual_x)) % 2 == 0).all()
         if not (sz_cleared and sx_cleared):
             return 1
 
-        logical_x_flip = ((self.lx @ residual_x) % 2).any()
-        logical_z_flip = ((self.lz @ residual_z) % 2).any()
+        logical_x_flip = ((self.lx.dot(residual_x)) % 2).any()
+        logical_z_flip = ((self.lz.dot(residual_z)) % 2).any()
         if logical_x_flip or logical_z_flip:
             return 1
 

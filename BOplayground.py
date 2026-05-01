@@ -1081,6 +1081,9 @@ if __name__ == "__main__":
 
     args = get_args()
 
+    import time
+    start_time = time.perf_counter()
+
     if args.distance_exact or args.distance_heuristic:
         code_eval_metric = "distance"
     else:
@@ -1193,12 +1196,9 @@ if __name__ == "__main__":
         y_init = data["y"]
         pl_init = data["pl"]
 
-    X_init = torch.tensor(X_init, dtype=torch.float64)
-    X_init.to(DEVICE)  # think this line should be X_init = X_init.to(DEVICE)
-    y_init = torch.tensor(y_init, dtype=torch.float32)
-    y_init.to(DEVICE)
-    pl_init = torch.tensor(pl_init, dtype=torch.float32)
-    pl_init.to(DEVICE)
+    X_init = torch.tensor(X_init, dtype=torch.float64).to(DEVICE)
+    y_init = torch.tensor(y_init, dtype=torch.float32).to(DEVICE)
+    pl_init = torch.tensor(pl_init, dtype=torch.float32).to(DEVICE)
     # get gp model
     model = get_model_(
         X_init,
@@ -1272,7 +1272,7 @@ if __name__ == "__main__":
     )
 
     # assemble BO
-    bo_iterations = 50
+    bo_iterations = 10
     bo = BO_on_QEC(
         gp=model,
         gp_trainer=trainer,
@@ -1289,6 +1289,8 @@ if __name__ == "__main__":
         code_eval_metric=code_eval_metric,
     )
     best_x, best_y, evaluation_history = bo.run()
+    end_time = time.perf_counter()
+    print(f"Time taken: {end_time - start_time:.2f} seconds")
 
     # The best-so-far results of bo (including initial points)
     flat = [v for row in evaluation_history for v in row]
@@ -1296,6 +1298,7 @@ if __name__ == "__main__":
     flat = y_init_list + flat
 
     results_file = init_data_file.replace("BO_initial_points", "BO_results")
+
 
     with open(results_file, "wb") as f:
         results = {"best_x": best_x, "best_y": best_y, "evaluation_history": flat}
