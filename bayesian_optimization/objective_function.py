@@ -84,7 +84,7 @@ class f2_converter:
         self.t_grid = np.arange(self.n + 1, dtype=float)
         self.f2_table = log_prefix / (self.n * math.log(2.0))
 
-        # Interpolator setup
+        # Interpolator setup: t -> f2
         if use_pchip:
             self._t2f2, self._linear = _build_pchip(self.t_grid, self.f2_table)
             if not self._linear:
@@ -94,6 +94,24 @@ class f2_converter:
         else:
             self._t2f2, self._linear = (self.t_grid, self.f2_table), True
             self._t2f2_deriv = None
+
+        # ------------------------------------------------------------
+        # NEW: build inverse interpolator: f2 -> t
+        # PCHIP requires strictly increasing x; enforce monotonicity robustly.
+        # ------------------------------------------------------------
+        f = np.asarray(self.f2_table, float).copy()
+        # enforce strict increase (handles any rare numerical ties)
+        for i in range(1, f.size):
+            if f[i] <= f[i - 1]:
+                f[i] = np.nextafter(f[i - 1], np.inf)
+
+        self.f2_min = float(f[0])
+        self.f2_max = float(f[-1])
+
+        if use_pchip:
+            self._f2_2_t, self._inv_linear = _build_pchip(f, self.t_grid)
+        else:
+            self._f2_2_t, self._inv_linear = (f, self.t_grid), True
 
     def t_to_f2(self, t):
         """Evaluate f2(t) for scalar or array inputs."""
@@ -107,6 +125,31 @@ class f2_converter:
         else:
             x, y = self._t2f2
             return _eval_piecewise_slope(x, y, t)
+
+    # ======================
+    # NEW METHOD
+    # ======================
+    def f2_to_t(self, f2, *, clip: bool = True):
+        """
+        Invert the mapping: given y = f2(t), return t (scalar or array).
+        If clip=True, values outside [f2_min, f2_max] are clipped to the range.
+        If clip=False, a ValueError is raised for out-of-range inputs.
+        """
+        y = np.asarray(f2, float)
+
+        if clip:
+            y_eval = np.clip(y, self.f2_min, self.f2_max)
+        else:
+            if np.any((y < self.f2_min) | (y > self.f2_max)):
+                raise ValueError(
+                    f"f2 out of range: valid [{self.f2_min}, {self.f2_max}], got [{float(y.min())}, {float(y.max())}]"
+                )
+            y_eval = y
+
+        t = _eval_interp(self._f2_2_t, y_eval)
+        # if scalar input, return scalar
+        return float(t) if np.isscalar(f2) else t
+
 
 # =========================================
 # pl_t_converter: t <-> pL (with derivative)
@@ -207,14 +250,14 @@ class ObjectiveFunction:
         returns (F_mean, F_std), or with aux diagnostics if return_aux=True.
     """
 
-    def __init__(self, code_constructor, lambda_ = 1,pp=0.01, decoder_param={'trail': 10000,'max_error':100},
+    def __init__(self, code_constructor, lambda_ = 1,lambda_2=0.05,pp=0.01, decoder_param={'trail': 10000,'max_error':100},
                  circuit_level_noise=False, circuit_param=None):
         self.code_constructor = code_constructor
         self.n = int(code_constructor.n)
         self.pp = float(pp)
         self.decoder_param = dict(decoder_param)
         self.lambda_ = lambda_
-
+        self.lambda_2 = lambda_2
         # Converters
         self.pl_t_converter = pl_t_converter(self.n, p_phys=self.pp, use_pchip=True)
         self.f2_converter = f2_converter(self.n, use_pchip=True)
@@ -319,6 +362,10 @@ class ObjectiveFunction:
         t_hat, pL_total = self.psuedo_t(css)
         f2_val = float(self.f2_converter.t_to_f2(t_hat))
         F = self.lambda_ * R + f2_val - 1.0
+
+
+        # Add weight term
+        F -= max(0, (css.mean_weight/6 - 1))* self.lambda_2
         return float(F), float(pL_total)
 
     # ---------------------------
@@ -335,6 +382,17 @@ class ObjectiveFunction:
         std = pl_total_std*(1-pl_total_mean)**(1/css.k-1)/(css.k * (1-(1-pl_total_mean)**(1/css.k)))
         return float(mean), float(std)
 
+    def obj_to_pl(self,x,obj):
+        css = self.code_constructor.construct(self._to_np_bits(x))
+        k = css.k
+        n = css.n
+        R = k/n
+        f2_t = obj + self.lambda_ * R + 1.0
+        # f2 to t
+        t = self.f2_converter.f2_to_t(f2_t)
+        # t to pl
+        pl = self.pl_t_converter.t_to_pl(t)
+        return pl
     def pl_to_obj_with_std(self, x, pl_total_mean, pl_total_std, return_aux: bool = False):
         """
         Given the mean/std of the total logical error rate (pL_total),
@@ -395,6 +453,8 @@ class ObjectiveFunction:
         t_hat = float(self.pl_t_converter.pl_to_t(k=None, pl=m))
         f2_val = float(self.f2_converter.t_to_f2(t_hat))
         F_mean = self.lambda_ * R + f2_val - 1.0
+        # Add weight term
+        F_mean -= max(0, (css.mean_weight/6 - 1))* self.lambda_2
 
         dlog10pl_dt = float(self.pl_t_converter.dlog10pl_dt(t_hat))
         dpl_dt = math.log(10.0) * m * dlog10pl_dt      # dp/dt
