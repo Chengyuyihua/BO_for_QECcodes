@@ -48,6 +48,7 @@ class CSSCode(StabilizerCode):
         self.lz = np.array(qcode.lz.toarray()) # logical operators
         self.k = qcode.K
         self.n = qcode.N
+        self.mean_weight = self.get_mean_weight()
         
         
     
@@ -62,6 +63,8 @@ class CSSCode(StabilizerCode):
             print('some x and z stabilizers do not commute')
             return False
         return True
+    def get_mean_weight(self):
+        return (np.sum(self.hx) + np.sum(self.hz)) / (self.hx.shape[0] + self.hz.shape[0])
 
 
 
