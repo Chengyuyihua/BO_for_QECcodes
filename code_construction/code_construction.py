@@ -465,6 +465,17 @@ class CodeConstructor:
                 gx_bin = CodeConstructor.multiply_polynomials_mod_l(gx_bin, fs[i], l)
 
         return gx_bin
+    
+    @staticmethod
+    def poly_mod_f2(p, g):
+        deg_g = g.bit_length() - 1
+        deg_p = p.bit_length() - 1
+        while deg_p >= deg_g:  # continuously subtract multiples of g(x) from p(x)
+            shift = deg_p - deg_g
+            p ^= (g << shift)
+            deg_p = p.bit_length() - 1
+
+        return p  # p is remainder
 
     def _build_circulant_matrix(self, row, length=None) -> np.ndarray:
         if length is None:
@@ -482,26 +493,18 @@ class CodeConstructor:
 
     def generalised_bicycle_code(self, parameters) -> CSSCode:
         """
-        parameters = [gx_mask, qa, qb, f1, ..., fn]
-        gx_mask (int): binary mask of which irreducable factors of (x^l - 1) make up q(x)
-        qa (int): binary representation of polynomial q_a(x)
-        qb (int): binary representation of polynomial q_b(x)
-        fk (int): binary representation of the irreducable factors of (x^l - 1)
+        parameters = [gx_mask, a, b, f1, ..., fn]
+        gx_mask (list[binary]): binary mask of which irreducable factors of (x^l - 1) make up g(x)
+        a (list[binary]): binary representation of polynomial a(x)
+        b (list[binary]): binary representation of polynomial b(x)
+        fk (list[binary]): binary representation of the irreducable factors of (x^l - 1)
         """
         l = self.para_dict["l"]
 
-        gx_mask, qa, qb = [int(x) for x in parameters[:3]]
-        fs = [int(x) for x in parameters[3:]]
+        _, a, b = parameters[1:3]
 
-        # compute g(x) polynomial
-        gx_bin = self.gx_mask_to_bin(gx_mask, fs, l)
-
-        # calculate a(x) = g(x) * q_a(x), b(x) = g(x) * q_b(x)
-        a_int = CodeConstructor.multiply_polynomials_mod_l(gx_bin, qa, l)
-        b_int = CodeConstructor.multiply_polynomials_mod_l(gx_bin, qb, l)
-
-        a_array = np.array([int(bit) for bit in bin(a_int)[2:].zfill(l)[::-1]])
-        b_array = np.array([int(bit) for bit in bin(b_int)[2:].zfill(l)[::-1]])
+        a_array = np.array(a)
+        b_array = np.array(b)
 
         A = self._build_circulant_matrix(a_array)
         B = self._build_circulant_matrix(b_array)

@@ -7,6 +7,7 @@ import torch
 from torch.nn.utils import clip_grad_norm_
 from torch.distributions.normal import Normal
 import sympy
+import scipy
 
 from code_construction.code_construction import CodeConstructor
 from bayesian_optimization.objective_function import ObjectiveFunction
@@ -48,7 +49,7 @@ class HillClimbing:
         self.target_row_weight = target_row_weight
         match method:
             case "gb":
-                self.mutate = self.swap_factors
+                self.mutate = self.mutate_gb
             case "bb":
                 self.mutate = self.flip_neighbours
             case _:
@@ -64,55 +65,124 @@ class HillClimbing:
             n[i] = 1.0 - n[i]
             neigh_list.append(n)
         return torch.stack(neigh_list, dim=0)  # [d, d]
-
-    def swap_factors(self, x: torch.Tensor) -> torch.Tensor:
+    
+    def _bin_arr_to_int(self, bin_arr):
+        return sum([bit << i for i, bit in enumerate(bin_arr)])
+    
+    def mutate_gb(self, x: torch.Tensor) -> torch.Tensor:
+        # existing p(x) is divided by g(x)
+        # flipping one 0->1 and one 1->0 to keep density, same as:
+        #   p(x) + x^i + x^j
+        # If this must be divisible by g(x), then so must be the delta (x^i + x^j) = x^i(1 + x^|j-i|)
+        # let d = |j-i|
         x = x.detach()
 
-        gx_mask = int(x[0].item())
-        qa = int(x[1].item())
-        qb = int(x[2].item())
-        fs = [int(f.item()) for f in x[3:]]
+        a = x[1]
+        a_len = len(a)
+        b = x[2]
+        b_len = len(b)
+        int_fs = map(self._bin_arr_to_int, x[3:])
+        int_gx_mask = self._bin_arr_to_int(x[0])
+        gx_bin = CodeConstructor.gx_mask_to_bin(int_gx_mask, int_fs, self.l)
 
-        gx_bin = CodeConstructor.gx_mask_to_bin(gx_mask, fs, self.l)
+        valid_dists = []
 
-        max_bound = self.l - (gx_bin.bit_length() - 1)
+        for d in range(1, self.l):
+            delta = 1 + (1 << d)
+            if CodeConstructor.poly_mod_f2(delta, gx_bin) == 0:
+                valid_dists.append(d)
 
         neigh_list = []
-        for i in range(max_bound):
-            for j in range(i, max_bound):
-                if i == j:
-                    new_qa = qa ^ (1 << i)  # flips one factor of qa
-                    new_qb = qb ^ (1 << i)
-                else:
-                    new_qa = qa ^ (1 << i) ^ (1 << j)  # flips two factors of qa
-                    new_qb = qb ^ (1 << i) ^ (1 << j)
+        
+        a_ones = (a == 1).nonzero().squeeze().tolist()
+        for one_pos in a_ones:
+            for d in valid_dists:
+                if a[(one_pos + d) % a_len].item() == 0:
+                    new_a = a.clone()
+                    new_a[one_pos] = 0
+                    new_a[(one_pos + d) % a_len] = 1
+                    new = x.clone()
+                    new[1] = new_a
+                    neigh_list.append(new)
+                if a[(one_pos - d) % a_len].item() == 0 and ((one_pos - d) % a_len) != ((one_pos + d) % a_len):
+                    new_a = a.clone()
+                    new_a[one_pos] = 0
+                    new_a[(one_pos - d) % a_len] = 1
+                    new = x.clone()
+                    new[1] = new_a
+                    neigh_list.append(new)
 
-                a_weight = CodeConstructor.multiply_polynomials_mod_l(
-                    gx_bin, new_qa, self.l
-                ).bit_count()
-
-                b_weight = CodeConstructor.multiply_polynomials_mod_l(
-                    gx_bin, new_qb, self.l
-                ).bit_count()
-
-                if (
-                    a_weight == self.target_row_weight
-                ):  # checks if new a(x) preserves LDPC density
-                    n1 = x.clone()
-                    n1[1] = new_qa
-                    neigh_list.append(n1)
-
-                if (
-                    b_weight == self.target_row_weight
-                ):  # checks if new b(x) preserves LDPC density
-                    n2 = x.clone()
-                    n2[2] = new_qb
-                    neigh_list.append(n2)
-
+        b_ones = (b == 1).nonzero().squeeze().tolist()
+        for one_pos in b_ones:
+            for d in valid_dists:
+                if b[(one_pos + d) % b_len].item() == 0:
+                    new_b = b.clone()
+                    new_b[one_pos] = 0
+                    new_b[(one_pos + d) % b_len] = 1
+                    new = x.clone()
+                    new[1] = new_b
+                    neigh_list.append(new)
+                if b[(one_pos - d) % b_len].item() == 0 and ((one_pos - d) % b_len) != ((one_pos + d) % b_len):
+                    new_b = b.clone()
+                    new_b[one_pos] = 0
+                    new_b[(one_pos - d) % b_len] = 1
+                    new = x.clone()
+                    new[1] = new_b
+                    neigh_list.append(new)
+                
         if not neigh_list:
             return torch.empty((0, len(x)), dtype=x.dtype, device=x.device)
 
         return torch.stack(neigh_list, dim=0)
+
+    # def swap_factors(self, x: torch.Tensor) -> torch.Tensor:
+    #     x = x.detach()
+
+    #     gx_mask = int(x[0].item())
+    #     qa = int(x[1].item())
+    #     qb = int(x[2].item())
+    #     fs = [int(f.item()) for f in x[3:]]
+
+    #     gx_bin = CodeConstructor.gx_mask_to_bin(gx_mask, fs, self.l)
+
+    #     max_bound = self.l - (gx_bin.bit_length() - 1)
+
+    #     neigh_list = []
+    #     for i in range(max_bound):
+    #         for j in range(i, max_bound):
+    #             if i == j:
+    #                 new_qa = qa ^ (1 << i)  # flips one factor of qa
+    #                 new_qb = qb ^ (1 << i)
+    #             else:
+    #                 new_qa = qa ^ (1 << i) ^ (1 << j)  # flips two factors of qa
+    #                 new_qb = qb ^ (1 << i) ^ (1 << j)
+
+    #             a_weight = CodeConstructor.multiply_polynomials_mod_l(
+    #                 gx_bin, new_qa, self.l
+    #             ).bit_count()
+
+    #             b_weight = CodeConstructor.multiply_polynomials_mod_l(
+    #                 gx_bin, new_qb, self.l
+    #             ).bit_count()
+
+    #             if (
+    #                 a_weight == self.target_row_weight
+    #             ):  # checks if new a(x) preserves LDPC density
+    #                 n1 = x.clone()
+    #                 n1[1] = new_qa
+    #                 neigh_list.append(n1)
+
+    #             if (
+    #                 b_weight == self.target_row_weight
+    #             ):  # checks if new b(x) preserves LDPC density
+    #                 n2 = x.clone()
+    #                 n2[2] = new_qb
+    #                 neigh_list.append(n2)
+
+    #     if not neigh_list:
+    #         return torch.empty((0, len(x)), dtype=x.dtype, device=x.device)
+
+    #     return torch.stack(neigh_list, dim=0)
 
     @torch.no_grad()
     def __call__(self, gp) -> torch.Tensor:
@@ -903,7 +973,7 @@ class Get_new_points_function:
 
         return valid_bitmasks
 
-    def set_gx_mask(self):
+    def set_gx_mask(self):  # gx_mask is input as an int and later converted to a binary array
         l = self.code_constructor.para_dict["l"]
         self.factors = self._get_irreducible_factors(l)
         if self.gx_mask is not None:
@@ -916,51 +986,45 @@ class Get_new_points_function:
             self.gx_mask = random.choice(possible_gx_masks)
             print(f"Randomly selected g(x) bitmask = {self.gx_mask}")
 
+    def _generate_candidate_poly(self, max_index):
+        indices = np.random.choice(max_index, self.density, replace=False)
+        
+        res = 0
+        for idx in indices:
+            res |= 1 << idx
+
+        return res
+
+    
+    def _int_to_bin_list(bin_int):
+        return [int(bit) for bit in bin(bin_int)[2:]][::-1]  # least -> most significant bit
+
+
     def get_new_gb_vector(self, number):
         results = []
         l = self.code_constructor.para_dict["l"]
 
         gx_bin = CodeConstructor.gx_mask_to_bin(self.gx_mask, self.factors, l)
-
-        max_bound = 2 ** (l - (gx_bin.bit_length() - 1))
+        max_bound = l - (gx_bin.bit_length() - 1)
 
         while number > 0:
-            batch_guesses = np.random.randint(1, max_bound, size=10_000)
-            qa_found = False
+            cand_a = self._generate_candidate_poly(max_bound)
+            if CodeConstructor.poly_mod_f2(cand_a, gx_bin) == 0:  # gx_bin divides cand_a
+                
+                found_b = False
+                while not found_b:
+                    cand_b = self._generate_candidate_poly(max_bound)
+                    if CodeConstructor.poly_mod_f2(cand_b, gx_bin) == 0:
+                        found_b = True
 
-            for qa in batch_guesses:
-                qa = qa.item()
-
-                # qa = np.random.randint(1, max_bound)
-                weight_a = CodeConstructor.multiply_polynomials_mod_l(
-                    gx_bin, qa, l
-                ).bit_count()
-                # if weight_a != self.density:
-                #     continue
-                if weight_a == self.density:
-                    qa_found = True
-                    break
-
-            if qa_found:
-                qb_found = False
-                while not qb_found:
-                    batch_guesses = np.random.randint(1, max_bound, size=10_000)
-
-                    for qb in batch_guesses:
-                        qb = qb.item()
-                        weight_b = CodeConstructor.multiply_polynomials_mod_l(
-                            gx_bin, qb, l
-                        ).bit_count()
-                        if weight_b == self.density:
-                            qb_found = True
-                            break
-
-                parameters = [self.gx_mask, qa, qb] + self.factors
-
+                parameters = [
+                    self._int_to_bin_list(self.gx_mask),
+                    self._int_to_bin_list(cand_a),
+                    self._int_to_bin_list(cand_b)
+                ] + list(map(self._int_to_bin_list, self.factors))
                 results.append(parameters)
                 number -= 1
 
-        return np.array(results)
 
     def get_new_bb_vector(self, number):
         results = []
