@@ -465,14 +465,14 @@ class CodeConstructor:
                 gx_bin = CodeConstructor.multiply_polynomials_mod_l(gx_bin, fs[i], l)
 
         return gx_bin
-    
+
     @staticmethod
     def poly_mod_f2(p, g):
         deg_g = g.bit_length() - 1
         deg_p = p.bit_length() - 1
         while deg_p >= deg_g:  # continuously subtract multiples of g(x) from p(x)
             shift = deg_p - deg_g
-            p ^= (g << shift)
+            p ^= g << shift
             deg_p = p.bit_length() - 1
 
         return p  # p is remainder
@@ -501,7 +501,7 @@ class CodeConstructor:
         """
         l = self.para_dict["l"]
 
-        _, a, b = parameters[1:3]
+        a, b = parameters[1:3]
 
         a_array = np.array(a)
         b_array = np.array(b)

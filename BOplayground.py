@@ -65,10 +65,11 @@ class HillClimbing:
             n[i] = 1.0 - n[i]
             neigh_list.append(n)
         return torch.stack(neigh_list, dim=0)  # [d, d]
-    
-    def _bin_arr_to_int(self, bin_arr):
-        return sum([bit << i for i, bit in enumerate(bin_arr)])
-    
+
+    @staticmethod
+    def bin_list_to_int(bin_list):
+        return sum([int(bit) << i for i, bit in enumerate(bin_list)])
+
     def mutate_gb(self, x: torch.Tensor) -> torch.Tensor:
         # existing p(x) is divided by g(x)
         # flipping one 0->1 and one 1->0 to keep density, same as:
@@ -79,10 +80,12 @@ class HillClimbing:
 
         a = x[1]
         a_len = len(a)
+
         b = x[2]
         b_len = len(b)
-        int_fs = map(self._bin_arr_to_int, x[3:])
-        int_gx_mask = self._bin_arr_to_int(x[0])
+
+        int_fs = list(map(HillClimbing.bin_list_to_int, x[3:].tolist()))
+        int_gx_mask = HillClimbing.bin_list_to_int(x[0].tolist())
         gx_bin = CodeConstructor.gx_mask_to_bin(int_gx_mask, int_fs, self.l)
 
         valid_dists = []
@@ -93,7 +96,7 @@ class HillClimbing:
                 valid_dists.append(d)
 
         neigh_list = []
-        
+
         a_ones = (a == 1).nonzero().squeeze().tolist()
         for one_pos in a_ones:
             for d in valid_dists:
@@ -104,7 +107,9 @@ class HillClimbing:
                     new = x.clone()
                     new[1] = new_a
                     neigh_list.append(new)
-                if a[(one_pos - d) % a_len].item() == 0 and ((one_pos - d) % a_len) != ((one_pos + d) % a_len):
+                if a[(one_pos - d) % a_len].item() == 0 and ((one_pos - d) % a_len) != (
+                    (one_pos + d) % a_len
+                ):
                     new_a = a.clone()
                     new_a[one_pos] = 0
                     new_a[(one_pos - d) % a_len] = 1
@@ -122,14 +127,16 @@ class HillClimbing:
                     new = x.clone()
                     new[1] = new_b
                     neigh_list.append(new)
-                if b[(one_pos - d) % b_len].item() == 0 and ((one_pos - d) % b_len) != ((one_pos + d) % b_len):
+                if b[(one_pos - d) % b_len].item() == 0 and ((one_pos - d) % b_len) != (
+                    (one_pos + d) % b_len
+                ):
                     new_b = b.clone()
                     new_b[one_pos] = 0
                     new_b[(one_pos - d) % b_len] = 1
                     new = x.clone()
                     new[1] = new_b
                     neigh_list.append(new)
-                
+
         if not neigh_list:
             return torch.empty((0, len(x)), dtype=x.dtype, device=x.device)
 
@@ -973,7 +980,9 @@ class Get_new_points_function:
 
         return valid_bitmasks
 
-    def set_gx_mask(self):  # gx_mask is input as an int and later converted to a binary array
+    def set_gx_mask(
+        self,
+    ):  # gx_mask is input as an int and later converted to a binary array
         l = self.code_constructor.para_dict["l"]
         self.factors = self._get_irreducible_factors(l)
         if self.gx_mask is not None:
@@ -986,19 +995,20 @@ class Get_new_points_function:
             self.gx_mask = random.choice(possible_gx_masks)
             print(f"Randomly selected g(x) bitmask = {self.gx_mask}")
 
-    def _generate_candidate_poly(self, max_index):
-        indices = np.random.choice(max_index, self.density, replace=False)
-        
+    def _generate_candidate_poly(self, max_index) -> int:
+        indices = np.random.choice(max_index, self.density, replace=False).tolist()
+
         res = 0
         for idx in indices:
             res |= 1 << idx
 
         return res
 
-    
-    def _int_to_bin_list(bin_int):
-        return [int(bit) for bit in bin(bin_int)[2:]][::-1]  # least -> most significant bit
-
+    @staticmethod
+    def int_to_bin_list(bin_int):
+        return [int(bit) for bit in bin(bin_int)[2:]][
+            ::-1
+        ]  # least -> most significant bit
 
     def get_new_gb_vector(self, number):
         results = []
@@ -1009,22 +1019,32 @@ class Get_new_points_function:
 
         while number > 0:
             cand_a = self._generate_candidate_poly(max_bound)
-            if CodeConstructor.poly_mod_f2(cand_a, gx_bin) == 0:  # gx_bin divides cand_a
-                
+            if (
+                CodeConstructor.poly_mod_f2(cand_a, gx_bin) == 0
+            ):  # gx_bin divides cand_a
                 found_b = False
                 while not found_b:
                     cand_b = self._generate_candidate_poly(max_bound)
                     if CodeConstructor.poly_mod_f2(cand_b, gx_bin) == 0:
                         found_b = True
 
+                padded_arr = np.zeros((3 + len(self.factors), l), dtype=np.uint8)
+
                 parameters = [
-                    self._int_to_bin_list(self.gx_mask),
-                    self._int_to_bin_list(cand_a),
-                    self._int_to_bin_list(cand_b)
-                ] + list(map(self._int_to_bin_list, self.factors))
-                results.append(parameters)
+                    Get_new_points_function.int_to_bin_list(self.gx_mask),
+                    Get_new_points_function.int_to_bin_list(cand_a),
+                    Get_new_points_function.int_to_bin_list(cand_b),
+                ] + list(map(Get_new_points_function.int_to_bin_list, self.factors))
+
+                for i, param in enumerate(parameters):
+                    padded_arr[i, : len(param)] = (
+                        param  # zero pad parameter matrix, works as binary is lsb first
+                    )
+
+                results.append(padded_arr)
                 number -= 1
 
+        return np.array(results)
 
     def get_new_bb_vector(self, number):
         results = []
@@ -1146,6 +1166,7 @@ if __name__ == "__main__":
     args = get_args()
 
     import time
+
     start_time = time.perf_counter()
 
     if args.distance_exact or args.distance_heuristic:
@@ -1362,7 +1383,6 @@ if __name__ == "__main__":
     flat = y_init_list + flat
 
     results_file = init_data_file.replace("BO_initial_points", "BO_results")
-
 
     with open(results_file, "wb") as f:
         results = {"best_x": best_x, "best_y": best_y, "evaluation_history": flat}
