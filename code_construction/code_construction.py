@@ -493,7 +493,7 @@ class CodeConstructor:
 
     def generalised_bicycle_code(self, parameters) -> CSSCode:
         """
-        parameters = [gx_mask, a, b, f1, ..., fn]
+        parameters = [gx_mask, a, b, f1, ..., fn] (but flattened)
         gx_mask (list[binary]): binary mask of which irreducable factors of (x^l - 1) make up g(x)
         a (list[binary]): binary representation of polynomial a(x)
         b (list[binary]): binary representation of polynomial b(x)
@@ -501,7 +501,8 @@ class CodeConstructor:
         """
         l = self.para_dict["l"]
 
-        a, b = parameters[1:3]
+        a = parameters[l : 2 * l]
+        b = parameters[2 * l : 3 * l]
 
         a_array = np.array(a)
         b_array = np.array(b)

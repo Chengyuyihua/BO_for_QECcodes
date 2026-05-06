@@ -78,14 +78,16 @@ class HillClimbing:
         # let d = |j-i|
         x = x.detach()
 
-        a = x[1]
+        a = x[self.l : 2 * self.l]
         a_len = len(a)
 
-        b = x[2]
+        b = x[2 * self.l : 3 * self.l]
         b_len = len(b)
 
-        int_fs = list(map(HillClimbing.bin_list_to_int, x[3:].tolist()))
-        int_gx_mask = HillClimbing.bin_list_to_int(x[0].tolist())
+        int_fs = list(
+            map(HillClimbing.bin_list_to_int, x[3 * self.l :].view(-1, self.l).tolist())
+        )
+        int_gx_mask = HillClimbing.bin_list_to_int(x[: self.l].tolist())
         gx_bin = CodeConstructor.gx_mask_to_bin(int_gx_mask, int_fs, self.l)
 
         valid_dists = []
@@ -105,7 +107,7 @@ class HillClimbing:
                     new_a[one_pos] = 0
                     new_a[(one_pos + d) % a_len] = 1
                     new = x.clone()
-                    new[1] = new_a
+                    new[self.l : 2 * self.l] = new_a
                     neigh_list.append(new)
                 if a[(one_pos - d) % a_len].item() == 0 and ((one_pos - d) % a_len) != (
                     (one_pos + d) % a_len
@@ -114,7 +116,7 @@ class HillClimbing:
                     new_a[one_pos] = 0
                     new_a[(one_pos - d) % a_len] = 1
                     new = x.clone()
-                    new[1] = new_a
+                    new[self.l : 2 * self.l] = new_a
                     neigh_list.append(new)
 
         b_ones = (b == 1).nonzero().squeeze().tolist()
@@ -125,7 +127,7 @@ class HillClimbing:
                     new_b[one_pos] = 0
                     new_b[(one_pos + d) % b_len] = 1
                     new = x.clone()
-                    new[1] = new_b
+                    new[2 * self.l : 3 * self.l] = new_b
                     neigh_list.append(new)
                 if b[(one_pos - d) % b_len].item() == 0 and ((one_pos - d) % b_len) != (
                     (one_pos + d) % b_len
@@ -134,7 +136,7 @@ class HillClimbing:
                     new_b[one_pos] = 0
                     new_b[(one_pos - d) % b_len] = 1
                     new = x.clone()
-                    new[1] = new_b
+                    new[2 * self.l : 3 * self.l] = new_b
                     neigh_list.append(new)
 
         if not neigh_list:
@@ -1037,11 +1039,9 @@ class Get_new_points_function:
                 ] + list(map(Get_new_points_function.int_to_bin_list, self.factors))
 
                 for i, param in enumerate(parameters):
-                    padded_arr[i, : len(param)] = (
-                        param  # zero pad parameter matrix, works as binary is lsb first
-                    )
+                    padded_arr[i, : len(param)] = param  # padded so each param len l
 
-                results.append(padded_arr)
+                results.append(padded_arr.ravel())
                 number -= 1
 
         return np.array(results)
@@ -1165,10 +1165,6 @@ if __name__ == "__main__":
 
     args = get_args()
 
-    import time
-
-    start_time = time.perf_counter()
-
     if args.distance_exact or args.distance_heuristic:
         code_eval_metric = "distance"
     else:
@@ -1268,11 +1264,15 @@ if __name__ == "__main__":
             y, pl = obj_func(x)
             y_init.append(y)
             pl_init.append(pl)
-            print(f"Evaluated initial code {i}/{init_num} (score={y:.4f})")
+            print(f"Evaluated initial code {i + 1}/{init_num} (score={y:.4f})")
 
         with open(init_data_file, "wb") as f:
             pickle.dump({"X": X_init, "y": y_init, "pl": pl_init}, f)
             print(f"Saved initial points to {init_data_file}")
+
+    import time
+
+    start_time = time.perf_counter()
 
     print(f"Loading initial codes from {init_data_file}")
     with open(init_data_file, "rb") as f:
@@ -1357,7 +1357,7 @@ if __name__ == "__main__":
     )
 
     # assemble BO
-    bo_iterations = 10
+    bo_iterations = 50
     bo = BO_on_QEC(
         gp=model,
         gp_trainer=trainer,
