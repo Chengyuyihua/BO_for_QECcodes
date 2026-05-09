@@ -206,6 +206,11 @@ class HillClimbing:
             while True:
                 nbrs = self.mutate(best_neighbor).to(self.device)
                 acq_vals = self.acquisition(nbrs, gp).reshape(-1)  # [d]
+                if acq_vals.numel() == 0:
+                    print("WARNING: no neigbours could be found for the following code:")
+                    print(best_neighbor.tolist())
+                    break
+
                 top_val, top_idx = torch.topk(acq_vals, k=1)
                 top_val = top_val[0]
                 top_neighbor = nbrs[top_idx[0]]
