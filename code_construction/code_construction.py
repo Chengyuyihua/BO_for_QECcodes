@@ -634,18 +634,6 @@ class CodeConstructor:
                 B_A = np.vstack((B_A, r_matrix))
         return B_A
 
-    # def corresponding_matrix_Ba(self, g_size, a):
-    #     B_a = np.zeros((g_size, g_size), dtype=int)
-    #     for i in range(g_size):
-    #         B_a = (B_a + a[i] * self.g_power(g_size, i)) % 2
-    #     return B_a
-
-    # def g_power(self, g_size, p):
-    #     g_p = np.zeros((g_size, g_size), dtype=int)
-    #     for i in range(g_size):
-    #         g_p[i][int((i + p) % g_size)] = 1
-    #     return g_p
-
     def arbitrary_bivariate_bicycle_code(self, parameters):
         # a=[a_0,a_1,...,a_{l+g-2}] is a rep of coefficient of  A=a_0*I + a_1*x + a_2*x^2 +...+ a_{l-1}*x^{l-1} + a_l*y + a_{l+1}*y^2 +...+ a_{l+g-2}*y^{g-1}
         l = self.para_dict["l"]

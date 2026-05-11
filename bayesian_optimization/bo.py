@@ -104,7 +104,7 @@ class BO_on_QEC:
         self.device = device
         self.code_eval_metric = code_eval_metric
 
-        self.X = initial_X.to(self.device, dtype=torch.float64)
+        self.X = initial_X.to(self.device, dtype=torch.float32)
         # if code_eval_metric is distance, pl is true distance rather than true pl (logical error rate)
         # all similarly named pl variables will also refer to distance rather than LER (TODO fix varibale names)
         self.pl = initial_pl.to(
@@ -155,7 +155,7 @@ class BO_on_QEC:
         self.gp.eval()
         if hasattr(self.gp, "likelihood") and self.gp.likelihood is not None:
             self.gp.likelihood.eval()
-        X_tensor = X_tensor.to(self.device, dtype=torch.float64)
+        X_tensor = X_tensor.to(self.device, dtype=torch.float32)
         with gpytorch.settings.fast_pred_var():
             if hasattr(self.gp, "posterior"):
                 post = self.gp.posterior(X_tensor)
@@ -207,7 +207,7 @@ class BO_on_QEC:
 
             # --- Step 1: suggest candidates ---
             t0 = time.time()
-            next_points = self.suggest_next(self.gp)  # torch.float64, [n, d], on device
+            next_points = self.suggest_next(self.gp)  # torch.float32, [n, d], on device
             t_next = time.time()
 
             # --- Step 1b: pre-evaluation predictions for diagnostics ---

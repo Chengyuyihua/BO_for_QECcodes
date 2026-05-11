@@ -144,59 +144,10 @@ class HillClimbing:
 
         return torch.stack(neigh_list, dim=0)
 
-    # def swap_factors(self, x: torch.Tensor) -> torch.Tensor:
-    #     x = x.detach()
-
-    #     gx_mask = int(x[0].item())
-    #     qa = int(x[1].item())
-    #     qb = int(x[2].item())
-    #     fs = [int(f.item()) for f in x[3:]]
-
-    #     gx_bin = CodeConstructor.gx_mask_to_bin(gx_mask, fs, self.l)
-
-    #     max_bound = self.l - (gx_bin.bit_length() - 1)
-
-    #     neigh_list = []
-    #     for i in range(max_bound):
-    #         for j in range(i, max_bound):
-    #             if i == j:
-    #                 new_qa = qa ^ (1 << i)  # flips one factor of qa
-    #                 new_qb = qb ^ (1 << i)
-    #             else:
-    #                 new_qa = qa ^ (1 << i) ^ (1 << j)  # flips two factors of qa
-    #                 new_qb = qb ^ (1 << i) ^ (1 << j)
-
-    #             a_weight = CodeConstructor.multiply_polynomials_mod_l(
-    #                 gx_bin, new_qa, self.l
-    #             ).bit_count()
-
-    #             b_weight = CodeConstructor.multiply_polynomials_mod_l(
-    #                 gx_bin, new_qb, self.l
-    #             ).bit_count()
-
-    #             if (
-    #                 a_weight == self.target_row_weight
-    #             ):  # checks if new a(x) preserves LDPC density
-    #                 n1 = x.clone()
-    #                 n1[1] = new_qa
-    #                 neigh_list.append(n1)
-
-    #             if (
-    #                 b_weight == self.target_row_weight
-    #             ):  # checks if new b(x) preserves LDPC density
-    #                 n2 = x.clone()
-    #                 n2[2] = new_qb
-    #                 neigh_list.append(n2)
-
-    #     if not neigh_list:
-    #         return torch.empty((0, len(x)), dtype=x.dtype, device=x.device)
-
-    #     return torch.stack(neigh_list, dim=0)
-
     @torch.no_grad()
     def __call__(self, gp) -> torch.Tensor:
         X0_np = self.gnp(self.next_points_num)  # [n, d], 0/1
-        X0 = torch.tensor(X0_np, dtype=torch.float64, device=self.device)
+        X0 = torch.tensor(X0_np, dtype=torch.float32, device=self.device)
 
         best_list = []
         for x in X0:  # x: [d]
@@ -207,7 +158,9 @@ class HillClimbing:
                 nbrs = self.mutate(best_neighbor).to(self.device)
                 acq_vals = self.acquisition(nbrs, gp).reshape(-1)  # [d]
                 if acq_vals.numel() == 0:
-                    print("WARNING: no neigbours could be found for the following code:")
+                    print(
+                        "WARNING: no neigbours could be found for the following code:"
+                    )
                     print(best_neighbor.tolist())
                     break
 
@@ -223,7 +176,7 @@ class HillClimbing:
 
             best_list.append(best_neighbor)
 
-        cand = torch.stack(best_list, dim=0)  # [n, d], float64, 0/1
+        cand = torch.stack(best_list, dim=0)  # [n, d], float32, 0/1
 
         if self.validator is not None:
             cand_np = cand.detach().cpu().numpy().astype(np.int64)
@@ -235,9 +188,9 @@ class HillClimbing:
                         cand_np[i] = self.gnp(1)
                         if tries > 1000:
                             break
-            cand = torch.tensor(cand_np, dtype=torch.float64, device=self.device)
+            cand = torch.tensor(cand_np, dtype=torch.float32, device=self.device)
 
-        return cand  # [n, d], float64(0/1), on device
+        return cand  # [n, d], float32(0/1), on device
 
 
 class EIAcquisitionFunction:
@@ -357,10 +310,10 @@ class EIAcquisitionFunction:
 
         # Ensure X is a proper tensor on the correct device
         if not torch.is_tensor(X):
-            X = torch.tensor(X, dtype=torch.float64)
+            X = torch.tensor(X, dtype=torch.float32)
         if X.ndim == 1:
             X = X.unsqueeze(0)
-        X = X.to(self.device, dtype=torch.float64)
+        X = X.to(self.device, dtype=torch.float32)
 
         # Evaluation mode for GP
         gp.eval()
@@ -1286,7 +1239,7 @@ if __name__ == "__main__":
         y_init = data["y"]
         pl_init = data["pl"]
 
-    X_init = torch.tensor(X_init, dtype=torch.float64).to(DEVICE)
+    X_init = torch.tensor(X_init, dtype=torch.float32).to(DEVICE)
     y_init = torch.tensor(y_init, dtype=torch.float32).to(DEVICE)
     pl_init = torch.tensor(pl_init, dtype=torch.float32).to(DEVICE)
     # get gp model
