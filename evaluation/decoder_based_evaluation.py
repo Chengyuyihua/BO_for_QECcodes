@@ -378,7 +378,7 @@ class CSS_Evaluator:
         # TODO
         p_l_ne = 0
 
-        print(n_e)
+        # print(n_e)
         for t in range(int(trail * (0.97**n_e))):
             error_x, error_z = self.Get_error(n_e)
 

@@ -109,7 +109,7 @@ class QEC_Dataset(Dataset):
                 pL = mc.run(
                     shots=noise_and_decoder_param.get("trail", 100_000),
                     max_error=noise_and_decoder_param.get("max_error", 100),
-                    num_workers=noise_and_decoder_param.get("num_worker", 24),
+                    num_workers=noise_and_decoder_param.get("num_workers", 24),
                 )
             return pL
 

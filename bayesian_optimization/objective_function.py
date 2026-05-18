@@ -314,7 +314,7 @@ class ObjectiveFunction:
             pL = mc.run(
                 shots=self.decoder_param["trail"],
                 max_error=self.decoder_param["max_error"],
-                num_workers=self.circuit_param["num_worker"],
+                num_workers=self.circuit_param["num_workers"],
             )
         else:
             evaluator = CSS_Evaluator(css.hx, css.hz)
@@ -325,7 +325,8 @@ class ObjectiveFunction:
             )
             pL = min(pL, 1 - (1e-8))
             pL = max(pL, 1e-20)
-            return float(pL)
+            
+        return float(pL)
 
     def nller(self, x):
         """Compute negative log-likelihood (-log pL)."""
