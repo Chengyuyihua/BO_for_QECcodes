@@ -1,19 +1,16 @@
 botorch==0.16.1
 bposd==2.1
+codedistance @ git+https://github.com/SpyroL7/codeDistancePYPI.git@v0.1.1
 Evaluate==0.4.6
 gpytorch==1.15.1
 ldpc==2.4.1
 matplotlib==3.8.4
-numpy==2.4.2
-pandas==3.0.0
-pyldpc==0.7.9
+numpy==2.2.6
 pymoo==0.6.1.6
-scikit_learn==1.8.0
-scipy==1.17.0
+qLDPC @ git+https://github.com/qLDPCOrg/qLDPC.git@main
+scipy==1.17.1
 sinter==1.15.0
 stim==1.16.dev1770241571
-TopoModelX==0.0.1
-TopoNetX==0.2.0
-torch==2.5.1  #+cu121
+sympy==1.13.1
 torch_geometric==2.7.0
 tqdm==4.67.3
