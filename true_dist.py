@@ -1,3 +1,4 @@
+import os
 import pickle
 from code_construction.code_construction import CodeConstructor, CSSCode
 import codedistance
@@ -54,40 +55,16 @@ gross_code = [
     0.0,
 ]
 
-files = [
-    None,
-    "NewResults\handpicked\BO_results_d_0_0.5.pkl",
-    "NewResults\handpicked\BO_results_d_2_1.0.pkl",
-    "NewResults\handpicked\BO_results_d_6_0.5.pkl",
-    "NewResults\handpicked\BO_results_d_7_0.5.pkl",
-    "NewResults\handpicked\BO_results_d_9_0.5.pkl",
-    "NewResults\handpicked\GB_BO_results_0_0.5_4_72_10246.pkl",
-    "NewResults\handpicked\GB_BO_results_1_0.5_4_72_8595.pkl",
-    "NewResults\handpicked\GB_BO_results_4_0.5_6_72_16549.pkl",
-    "NewResults\handpicked\GB_BO_results_11_0.5_8_72_526394.pkl",
-]
+folder_path = "data/BO_results/lorenzo_results"
 
-pp_list = [
-    0.05,
-    0.040036870145840404,
-    0.032059019421497734,
-    0.0256708559516296,
-    0.020555614525359374,
-    0.01645964939039528,
-    0.013179856905786339,
-    0.010553604389554513,
-    0.008450665770303305,
-    0.0067667641618306355,
-]
-
-ler_results = []
-
-for file in files:
-    if file is None:
+for file_name in [None] + os.listdir(folder_path):
+    if file_name is None:
+        file = "gross code"
         code = cc.construct(gross_code)
         best_x = gross_code
         best_y = 0
     else:
+        file = os.path.join(folder_path, file_name)
         with open(file, "rb") as f:
             results = pickle.load(f)
             best_x = results["best_x"]
